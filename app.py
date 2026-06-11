@@ -142,7 +142,7 @@ def register_routes(app):
     @app.route("/api/config")
     def api_config():
         """Expune taxonomiile customizabile către frontend."""
-        payload = {"school": config.SCHOOL}
+        payload = {"school": serialize_system_config(SystemConfig.query.first())}
         payload.update(_config_payload())
         return jsonify(payload)
 

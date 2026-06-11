@@ -229,3 +229,10 @@ def test_dashboard_reflects_system_config(client):
     client.put("/api/system", json={"name": "Maple Special School", "roll_number": "99999Z"})
     html = client.get("/").get_data(as_text=True)
     assert "Maple Special School" in html
+
+
+def test_api_config_reflects_system_config(client):
+    client.put("/api/system", json={"name": "Birch College", "roll_number": "55555X"})
+    body = client.get("/api/config").get_json()
+    assert body["school"]["name"] == "Birch College"
+    assert body["school"]["roll_number"] == "55555X"
