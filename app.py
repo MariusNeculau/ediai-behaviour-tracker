@@ -19,8 +19,8 @@ from datetime import date, datetime
 from flask import Flask, jsonify, render_template, request
 
 import config
-from models import db, Child, Staff, Room, Incident, Intervention
-from serializers import serialize_child, serialize_staff, serialize_room
+from models import db, Child, Staff, Room, Incident, Intervention, SystemConfig
+from serializers import serialize_child, serialize_staff, serialize_room, serialize_system_config
 
 
 def _serialize_incident(i):
@@ -78,6 +78,15 @@ def create_app():
 
 def seed_lookups():
     """Populează tabelele de catalog din config.py dacă sunt goale."""
+    if SystemConfig.query.first() is None:
+        db.session.add(
+            SystemConfig(
+                school_name=config.SCHOOL["name"],
+                roll_number=config.SCHOOL["roll_number"],
+            )
+        )
+        db.session.commit()
+
     if Room.query.count() == 0:
         for name in config.ROOMS:
             db.session.add(Room(name=name))
@@ -120,7 +129,7 @@ def register_routes(app):
         today = date.today()
         return render_template(
             "dashboard.html",
-            school=config.SCHOOL,
+            school=serialize_system_config(SystemConfig.query.first()),
             config_data=_config_payload(),
             children=[serialize_child(c) for c in Child.query.filter_by(active=True).all()],
             staff=[serialize_staff(s) for s in Staff.query.filter_by(active=True).all()],
@@ -133,7 +142,7 @@ def register_routes(app):
     @app.route("/api/config")
     def api_config():
         """Expune taxonomiile customizabile către frontend."""
-        payload = {"school": config.SCHOOL}
+        payload = {"school": serialize_system_config(SystemConfig.query.first())}
         payload.update(_config_payload())
         return jsonify(payload)
 

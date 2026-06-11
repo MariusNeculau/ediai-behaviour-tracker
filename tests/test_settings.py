@@ -181,3 +181,58 @@ def test_archive_child_keeps_row_and_incidents(app, client, child_id):
     with app.app_context():
         assert db.session.get(Child, child_id) is not None
         assert Incident.query.filter_by(child_id=child_id).count() == 1
+
+
+def test_system_config_seeded_from_config(app):
+    import config
+    from serializers import serialize_system_config
+    from models import SystemConfig
+
+    with app.app_context():
+        sc = SystemConfig.query.first()
+        assert sc is not None
+        assert SystemConfig.query.count() == 1
+        out = serialize_system_config(sc)
+        assert out["name"] == config.SCHOOL["name"]
+        assert out["roll_number"] == config.SCHOOL["roll_number"]
+
+
+def test_get_system_config_defaults(client):
+    import config
+
+    body = client.get("/api/system").get_json()
+    assert body["name"] == config.SCHOOL["name"]
+    assert body["roll_number"] == config.SCHOOL["roll_number"]
+
+
+def test_update_system_config(client):
+    res = client.put("/api/system", json={"name": "Oak Primary", "roll_number": "12345B"})
+    assert res.status_code == 200
+    assert res.get_json() == {"name": "Oak Primary", "roll_number": "12345B"}
+
+    body = client.get("/api/system").get_json()
+    assert body["name"] == "Oak Primary"
+    assert body["roll_number"] == "12345B"
+
+
+def test_update_system_blank_name_returns_400(client):
+    res = client.put("/api/system", json={"name": "   ", "roll_number": "12345B"})
+    assert res.status_code == 400
+
+
+def test_update_system_blank_roll_returns_400(client):
+    res = client.put("/api/system", json={"name": "Oak Primary", "roll_number": ""})
+    assert res.status_code == 400
+
+
+def test_dashboard_reflects_system_config(client):
+    client.put("/api/system", json={"name": "Maple Special School", "roll_number": "99999Z"})
+    html = client.get("/").get_data(as_text=True)
+    assert "Maple Special School" in html
+
+
+def test_api_config_reflects_system_config(client):
+    client.put("/api/system", json={"name": "Birch College", "roll_number": "55555X"})
+    body = client.get("/api/config").get_json()
+    assert body["school"]["name"] == "Birch College"
+    assert body["school"]["roll_number"] == "55555X"

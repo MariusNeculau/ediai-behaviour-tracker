@@ -13,6 +13,10 @@ def serialize_staff(s):
     return {"id": s.id, "name": s.name, "role": s.role, "active": s.active}
 
 
+def serialize_system_config(sc):
+    return {"name": sc.school_name, "roll_number": sc.roll_number}
+
+
 def serialize_child(c):
     return {
         "id": c.id,

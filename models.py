@@ -30,6 +30,22 @@ incident_interventions = db.Table(
 )
 
 
+class SystemConfig(db.Model):
+    """Identitatea școlii (nume + roll number). Un singur rând.
+
+    Sursa de adevăr la runtime — seed-uită o singură dată din config.SCHOOL.
+    """
+
+    __tablename__ = "system_config"
+
+    id = db.Column(db.Integer, primary_key=True)
+    school_name = db.Column(db.String(120), nullable=False)
+    roll_number = db.Column(db.String(40), nullable=False)
+
+    def __repr__(self):
+        return f"<SystemConfig {self.school_name!r} ({self.roll_number})>"
+
+
 class Room(db.Model):
     """Clasă / cameră — promovată din string pe Child la entitate proprie."""
 
