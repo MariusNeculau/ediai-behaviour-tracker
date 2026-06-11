@@ -100,3 +100,45 @@ def test_render_child_report_pdf_empty_state():
     }
     out = render_child_report_pdf(report)
     assert out[:4] == b"%PDF"
+
+
+def test_child_report_pdf_download(client, child_id):
+    res = client.get(f"/api/reports/child/{child_id}?period=month")
+    assert res.status_code == 200
+    assert res.mimetype == "application/pdf"
+    assert res.data[:4] == b"%PDF"
+    cd = res.headers["Content-Disposition"]
+    assert "Test_Child" in cd and ".pdf" in cd
+
+
+def test_child_report_default_period(client, child_id):
+    res = client.get(f"/api/reports/child/{child_id}")
+    assert res.status_code == 200
+    assert res.data[:4] == b"%PDF"
+
+
+def test_child_report_unknown_child_returns_404(client):
+    res = client.get("/api/reports/child/99999")
+    assert res.status_code == 404
+
+
+def test_child_report_invalid_period_returns_400(client, child_id):
+    res = client.get(f"/api/reports/child/{child_id}?period=decade")
+    assert res.status_code == 400
+
+
+def test_child_report_with_incident_still_pdf(app, client, child_id):
+    from datetime import datetime
+    from models import db, Incident
+
+    with app.app_context():
+        db.session.add(Incident(
+            child_id=child_id, occurred_at=datetime(2026, 6, 11, 9, 30),
+            type="Crisis", severity="High", trigger="Sensory",
+            outcome="De-escalated", duration=12,
+        ))
+        db.session.commit()
+
+    res = client.get(f"/api/reports/child/{child_id}?period=term")
+    assert res.status_code == 200
+    assert res.data[:4] == b"%PDF"
