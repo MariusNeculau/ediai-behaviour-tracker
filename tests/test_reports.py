@@ -182,3 +182,60 @@ def test_aggregate_shared():
     assert a["top_trigger"] == "Sensory"
     assert a["avg_duration"] == "10 min"
     assert a["pattern_text"].startswith("Most incidents were")
+
+
+def _mk_inc(child_id, trigger, hour=9, typ="Behavioural", sev="Medium", dur=10):
+    return SimpleNamespace(
+        child_id=child_id, occurred_at=datetime(2026, 6, 10, hour, 0),
+        type=typ, severity=sev, trigger=trigger, outcome="Resolved", duration=dur,
+        interventions=[SimpleNamespace(name="Calm Space")],
+    )
+
+
+def test_build_class_report():
+    from reports import build_class_report
+
+    room = SimpleNamespace(id=1, name="Room 1")
+    kids = [SimpleNamespace(id=10, name="Alice", room_id=1),
+            SimpleNamespace(id=11, name="Bob", room_id=1)]
+    incidents = [_mk_inc(10, "Sensory"), _mk_inc(10, "Sensory"), _mk_inc(11, "Noise")]
+    r = build_class_report(room, kids, incidents, "month", date(2026, 6, 11))
+
+    assert r["report_type"] == "class"
+    assert r["subtitle"] == "Class Summary · Room 1"
+    assert ["Students", "2"] in r["details_rows"]
+    assert r["total_incidents"] == 3
+    assert r["breakdown_header"] == ["Student", "Incidents", "Top Trigger"]
+    assert r["breakdown_rows"][0] == ["Alice", "2", "Sensory"]
+    assert r["breakdown_rows"][1] == ["Bob", "1", "Noise"]
+
+
+def test_build_class_report_empty():
+    from reports import build_class_report
+
+    room = SimpleNamespace(id=1, name="Room 1")
+    kids = [SimpleNamespace(id=10, name="Alice", room_id=1)]
+    r = build_class_report(room, kids, [], "week", date(2026, 6, 11))
+
+    assert r["total_incidents"] == 0
+    assert r["breakdown_rows"] == [["Alice", "0", "—"]]
+    assert r["pattern_text"] == "No incidents recorded in this period."
+
+
+def test_build_school_report():
+    from reports import build_school_report
+
+    rooms = [SimpleNamespace(id=1, name="Room 1"), SimpleNamespace(id=2, name="Room 2")]
+    kids = [SimpleNamespace(id=10, name="Alice", room_id=1),
+            SimpleNamespace(id=11, name="Bob", room_id=2),
+            SimpleNamespace(id=12, name="Cara", room_id=2)]
+    incidents = [_mk_inc(11, "Noise"), _mk_inc(12, "Noise"), _mk_inc(10, "Sensory")]
+    r = build_school_report(rooms, kids, incidents, "term", date(2026, 6, 11))
+
+    assert r["report_type"] == "school"
+    assert ["Classes", "2"] in r["details_rows"]
+    assert ["Students", "3"] in r["details_rows"]
+    assert r["total_incidents"] == 3
+    assert r["breakdown_header"] == ["Class", "Students", "Incidents", "Top Trigger"]
+    assert r["breakdown_rows"][0] == ["Room 2", "2", "2", "Noise"]
+    assert r["breakdown_rows"][1] == ["Room 1", "1", "1", "Sensory"]

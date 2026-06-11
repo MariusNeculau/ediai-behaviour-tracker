@@ -149,6 +149,80 @@ def build_child_report(child, incidents, period, today):
     }
 
 
+def build_class_report(room, children, incidents, period, today):
+    """View-model pur pentru un raport de clasă (agregate + breakdown per-elev)."""
+    window_days = _WINDOW_DAYS[period]
+    start = today - timedelta(days=window_days - 1)
+    period_range = f"{start.strftime('%d %b %Y')} – {today.strftime('%d %b %Y')}"
+    agg = _aggregate(incidents, window_days)
+
+    breakdown = []
+    for c in children:
+        c_inc = [i for i in incidents if i.child_id == c.id]
+        breakdown.append([c.name, str(len(c_inc)), _mode([i.trigger for i in c_inc])])
+    breakdown.sort(key=lambda row: (-int(row[1]), row[0]))
+
+    return {
+        "report_type": "class",
+        "school": "",
+        "school_roll": "",
+        "subtitle": f"Class Summary · {room.name}",
+        "period_label": _PERIOD_LABEL[period],
+        "period_range": period_range,
+        "generated_on": today.strftime("%d %b %Y"),
+        "details_title": "Class Details",
+        "details_rows": [
+            ["Class", room.name],
+            ["Students", str(len(children))],
+            ["Period", f"{_PERIOD_LABEL[period]} ({period_range})"],
+        ],
+        "breakdown_title": "Students",
+        "breakdown_header": ["Student", "Incidents", "Top Trigger"],
+        "breakdown_rows": breakdown,
+        **agg,
+    }
+
+
+def build_school_report(rooms, children, incidents, period, today):
+    """View-model pur pentru un raport pe toată școala (agregate + breakdown per-clasă)."""
+    window_days = _WINDOW_DAYS[period]
+    start = today - timedelta(days=window_days - 1)
+    period_range = f"{start.strftime('%d %b %Y')} – {today.strftime('%d %b %Y')}"
+    agg = _aggregate(incidents, window_days)
+
+    by_room = {}
+    for c in children:
+        by_room.setdefault(c.room_id, set()).add(c.id)
+
+    breakdown = []
+    for room in rooms:
+        ids = by_room.get(room.id, set())
+        r_inc = [i for i in incidents if i.child_id in ids]
+        breakdown.append([room.name, str(len(ids)), str(len(r_inc)),
+                          _mode([i.trigger for i in r_inc])])
+    breakdown.sort(key=lambda row: (-int(row[2]), row[0]))
+
+    return {
+        "report_type": "school",
+        "school": "",
+        "school_roll": "",
+        "subtitle": "Whole School Summary",
+        "period_label": _PERIOD_LABEL[period],
+        "period_range": period_range,
+        "generated_on": today.strftime("%d %b %Y"),
+        "details_title": "School Overview",
+        "details_rows": [
+            ["Classes", str(len(rooms))],
+            ["Students", str(len(children))],
+            ["Period", f"{_PERIOD_LABEL[period]} ({period_range})"],
+        ],
+        "breakdown_title": "Classes",
+        "breakdown_header": ["Class", "Students", "Incidents", "Top Trigger"],
+        "breakdown_rows": breakdown,
+        **agg,
+    }
+
+
 def render_child_report_pdf(report):
     """Construiește PDF-ul 'management report' în memorie și întoarce bytes."""
     from reportlab.lib import colors
