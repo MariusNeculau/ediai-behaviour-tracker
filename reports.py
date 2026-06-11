@@ -152,7 +152,7 @@ def render_child_report_pdf(report):
         SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
     )
 
-    footer_left = f"{report['child_name']} · Generated {report['generated_on']}"
+    footer_left = "Confidential - EDI AI Report"
 
     class NumberedCanvas(canvas.Canvas):
         """Desenează 'Page X of Y' + subsol oficial pe fiecare pagină."""
@@ -177,7 +177,6 @@ def render_child_report_pdf(report):
             self.setFont("Helvetica", 8)
             self.setFillGray(0.5)
             self.drawString(18 * mm, 12 * mm, footer_left)
-            self.drawCentredString(A4[0] / 2, 12 * mm, "CONFIDENTIAL")
             self.drawRightString(A4[0] - 18 * mm, 12 * mm,
                                  f"Page {self._pageNumber} of {total}")
 
@@ -190,26 +189,30 @@ def render_child_report_pdf(report):
     )
     styles = getSampleStyleSheet()
     h1 = ParagraphStyle("rh1", parent=styles["Title"], fontName="Helvetica-Bold",
-                        fontSize=18, spaceAfter=2)
+                        fontSize=18, spaceAfter=2, alignment=1)
+    school_style = ParagraphStyle("rschool", parent=styles["Normal"], fontName="Helvetica-Bold",
+                                  fontSize=11, alignment=1)
     sub = ParagraphStyle("rsub", parent=styles["Normal"], fontName="Helvetica",
-                         fontSize=9, textColor=colors.grey)
+                         fontSize=9, textColor=colors.grey, alignment=1)
     h2 = ParagraphStyle("rh2", parent=styles["Heading2"], fontName="Helvetica-Bold",
                         fontSize=12, spaceBefore=12, spaceAfter=4)
     body = ParagraphStyle("rbody", parent=styles["Normal"], fontName="Helvetica", fontSize=10)
 
     grey_grid = colors.HexColor("#bdbdbd")
     head_bg = colors.HexColor("#e8eef7")
+    box_border = colors.HexColor("#7a7a7a")
 
     story = []
 
-    # 1. Header band
+    # 1. Header band (centered, bold school identity)
     story.append(Paragraph("EDI AI Behaviour Report", h1))
     roll = report.get("school_roll") or ""
     school_line = report["school"]
     if roll:
         school_line += f" · Roll Number: {roll}"
-    story.append(Paragraph(f"{school_line} · Generated {report['generated_on']}", sub))
-    story.append(Spacer(1, 10))
+    story.append(Paragraph(school_line, school_style))
+    story.append(Paragraph(f"Generated {report['generated_on']}", sub))
+    story.append(Spacer(1, 12))
 
     # 2. Student Details
     story.append(Paragraph("Student Details", h2))
@@ -220,19 +223,21 @@ def render_child_report_pdf(report):
     ]
     details_tbl = Table(details, colWidths=[26 * mm, 60 * mm, 24 * mm, 44 * mm])
     details_tbl.setStyle(TableStyle([
-        ("FONT", (0, 0), (-1, -1), "Helvetica", 9),
+        ("FONT", (0, 0), (-1, -1), "Helvetica", 10),
         ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
         ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
         ("BACKGROUND", (0, 0), (0, -1), head_bg),
         ("BACKGROUND", (2, 0), (2, 1), head_bg),
         ("SPAN", (1, 2), (3, 2)),
-        ("GRID", (0, 0), (-1, -1), 0.5, grey_grid),
-        ("TOPPADDING", (0, 0), (-1, -1), 5),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, grey_grid),
+        ("BOX", (0, 0), (-1, -1), 1.0, box_border),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
         ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
     ]))
     story.append(details_tbl)
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 12))
 
     # 3. Key Stats
     story.append(Paragraph("Key Stats", h2))
@@ -249,11 +254,13 @@ def render_child_report_pdf(report):
         ("FONTNAME", (0, 1), (-1, 1), "Helvetica"),
         ("FONTSIZE", (0, 1), (-1, 1), 8),
         ("TEXTCOLOR", (0, 1), (-1, 1), colors.grey),
-        ("GRID", (0, 0), (-1, -1), 0.5, grey_grid),
+        ("INNERGRID", (0, 0), (-1, -1), 0.5, grey_grid),
+        ("BOX", (0, 0), (-1, -1), 1.0, box_border),
         ("TOPPADDING", (0, 0), (-1, -1), 6),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
     ]))
     story.append(stats_tbl)
+    story.append(Spacer(1, 12))
 
     # 4. Incident Summary (per-incident)
     story.append(Paragraph("Incident Summary", h2))
@@ -266,14 +273,17 @@ def render_child_report_pdf(report):
             ("BACKGROUND", (0, 0), (-1, 0), head_bg),
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
             ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
-            ("FONTSIZE", (0, 0), (-1, -1), 9),
-            ("GRID", (0, 0), (-1, -1), 0.5, grey_grid),
-            ("TOPPADDING", (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("FONTSIZE", (0, 0), (-1, -1), 10),
+            ("INNERGRID", (0, 0), (-1, -1), 0.5, grey_grid),
+            ("BOX", (0, 0), (-1, -1), 1.0, box_border),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
         ]))
         story.append(tbl)
     else:
         story.append(Paragraph("No incidents recorded in this period.", body))
+    story.append(Spacer(1, 12))
 
     # 5. Pattern Analysis (aggregated 3-column)
     story.append(Paragraph("Pattern Analysis", h2))
@@ -296,13 +306,17 @@ def render_child_report_pdf(report):
             ("BACKGROUND", (0, 0), (-1, 0), head_bg),
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
             ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
-            ("FONTSIZE", (0, 0), (-1, -1), 9),
-            ("GRID", (0, 0), (-1, -1), 0.5, grey_grid),
+            ("FONTSIZE", (0, 0), (-1, -1), 10),
+            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("TOPPADDING", (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("INNERGRID", (0, 0), (-1, -1), 0.5, grey_grid),
+            ("BOX", (0, 0), (-1, -1), 1.0, box_border),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
         ]))
-        story.append(Spacer(1, 4))
+        story.append(Spacer(1, 6))
         story.append(pa_tbl)
 
     doc.build(story, canvasmaker=NumberedCanvas)
