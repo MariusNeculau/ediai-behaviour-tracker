@@ -19,12 +19,12 @@ Migrarea aplicației de la un stack Web (Next.js/Firebase) la un stack Local Des
 
 ## Task-uri rămase (post-pas 5)
 - [x] Persistare formular: `POST /api/incidents` implementat; `saveIncident()` salvează în SQLite. Demo children seed-uite generic.
-- Settings CRUD (în lucru, branch `feature/settings-crud`):
+- [x] Settings CRUD (branch `feature/settings-crud`): soft-delete (arhivare), `Room` ca tabel cu FK, integritate referențială (blocare 409 la arhivare în uz). Istoricul incidentelor păstrat la schimbarea clasei.
   - [x] Fundație schemă: `Room` ca tabel cu FK (`Child.room_id`), flag-uri `active` (soft-delete) pe `Child`/`Staff`, modul `serializers.py`.
   - [x] Rooms API (`/api/rooms` GET/POST/PUT/DELETE) cu soft-delete + blocare 409 la arhivare în uz.
-  - [x] Staff API (`/api/staff` GET/POST/PUT/DELETE) cu blocare 409 dacă e key worker activ. Teste verzi (22 passed).
-  - [ ] Children API (`/api/children`) — următorul task.
-  - [ ] Frontend Settings (tabele + modale Add/Edit/Archive, rooms dinamice).
+  - [x] Staff API (`/api/staff` GET/POST/PUT/DELETE) cu blocare 409 dacă e key worker activ.
+  - [x] Children API (`/api/children` GET/POST/PUT/DELETE) — soft-delete păstrează incidentele; validare clasă/key worker/support.
+  - [x] Frontend Settings (tabele + modale Add/Edit/Archive, rooms dinamice). Teste verzi (27 passed).
 - Generare reală rapoarte PDF.
 
 ## Status:
