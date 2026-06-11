@@ -32,6 +32,15 @@ def period_start(period, today):
     return today - timedelta(days=_WINDOW_DAYS[period] - 1)
 
 
+def _count_dist(values):
+    """[(label, count)] sortat după count desc apoi label asc; ignoră valorile goale."""
+    items = [v for v in values if v]
+    if not items:
+        return []
+    counts = Counter(items)
+    return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+
+
 def _mode(values):
     """Cea mai frecventă valoare non-goală; egalități sparte de prima apariție."""
     items = [v for v in values if v]
@@ -90,6 +99,11 @@ def build_child_report(child, incidents, period, today):
         for i in incidents
     ]
 
+    age = child.age if child.age is not None else "—"
+    trigger_counts = _count_dist([i.trigger for i in incidents])
+    behavior_counts = _count_dist([i.type for i in incidents])
+    action_counts = _count_dist([iv.name for i in incidents for iv in i.interventions])
+
     if total == 0:
         pattern_text = "No incidents recorded in this period."
     else:
@@ -118,6 +132,11 @@ def build_child_report(child, incidents, period, today):
         "top_trigger": top_trigger,
         "top_type": top_type,
         "peak_time": peak_time,
+        "age": age,
+        "school_roll": "",
+        "trigger_counts": trigger_counts,
+        "behavior_counts": behavior_counts,
+        "action_counts": action_counts,
         "pattern_text": pattern_text,
     }
 

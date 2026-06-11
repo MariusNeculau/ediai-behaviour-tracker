@@ -19,42 +19,57 @@ def test_period_start_invalid_raises():
         period_start("decade", date(2026, 6, 11))
 
 
+def test_count_dist_orders_by_count_then_label():
+    from reports import _count_dist
+
+    assert _count_dist(["B", "A", "A", "B", "C", "B"]) == [("B", 3), ("A", 2), ("C", 1)]
+    assert _count_dist([]) == []
+    assert _count_dist([None, "", "X"]) == [("X", 1)]
+
+
 def test_build_child_report_aggregates():
     from reports import build_child_report
 
     child = SimpleNamespace(
-        name="Cian M.",
+        name="Cian M.", age=8,
         room=SimpleNamespace(name="Room 1"),
         key_worker=SimpleNamespace(name="Staff Member 1"),
     )
     incidents = [  # already sorted desc by occurred_at
         SimpleNamespace(occurred_at=datetime(2026, 6, 10, 9, 0), type="Behavioural",
-                        severity="High", trigger="Sensory", outcome="De-escalated", duration=10),
+                        severity="High", trigger="Sensory", outcome="De-escalated", duration=10,
+                        interventions=[SimpleNamespace(name="Calm Space"), SimpleNamespace(name="Sensory Tool")]),
         SimpleNamespace(occurred_at=datetime(2026, 6, 9, 14, 0), type="Behavioural",
-                        severity="Medium", trigger="Sensory", outcome="Resolved", duration=20),
+                        severity="Medium", trigger="Sensory", outcome="Resolved", duration=20,
+                        interventions=[SimpleNamespace(name="Calm Space")]),
         SimpleNamespace(occurred_at=datetime(2026, 6, 8, 9, 30), type="Crisis",
-                        severity="Medium", trigger="Transition", outcome="Resolved", duration=None),
+                        severity="Medium", trigger="Transition", outcome="Resolved", duration=None,
+                        interventions=[]),
     ]
     r = build_child_report(child, incidents, "month", date(2026, 6, 11))
 
     assert r["child_name"] == "Cian M."
+    assert r["age"] == 8
     assert r["room_name"] == "Room 1"
     assert r["key_worker"] == "Staff Member 1"
     assert r["total_incidents"] == 3
-    assert r["per_week_avg"] == 0.7              # 3 / (30/7)
-    assert r["top_severity"] == "Medium"         # 2x Medium vs 1x High
-    assert r["avg_duration"] == "15 min"         # (10+20)/2
-    assert r["top_trigger"] == "Sensory"         # 2x
-    assert r["top_type"] == "Behavioural"        # 2x
-    assert r["peak_time"].startswith("Morning")  # hours 9, 14, 9 -> Morning x2
+    assert r["per_week_avg"] == 0.7
+    assert r["top_severity"] == "Medium"
+    assert r["avg_duration"] == "15 min"
+    assert r["top_trigger"] == "Sensory"
+    assert r["top_type"] == "Behavioural"
+    assert r["peak_time"].startswith("Morning")
     assert len(r["incident_rows"]) == 3
     assert r["incident_rows"][0]["date"] == "10 Jun 2026"
+    assert r["trigger_counts"] == [("Sensory", 2), ("Transition", 1)]
+    assert r["behavior_counts"] == [("Behavioural", 2), ("Crisis", 1)]
+    assert r["action_counts"] == [("Calm Space", 2), ("Sensory Tool", 1)]
 
 
 def test_build_child_report_empty():
     from reports import build_child_report
 
-    child = SimpleNamespace(name="Empty Kid", room=None, key_worker=None)
+    child = SimpleNamespace(name="Empty Kid", age=None, room=None, key_worker=None)
     r = build_child_report(child, [], "week", date(2026, 6, 11))
 
     assert r["total_incidents"] == 0
@@ -63,6 +78,10 @@ def test_build_child_report_empty():
     assert r["avg_duration"] == "N/A"
     assert r["room_name"] == "—"
     assert r["key_worker"] == "—"
+    assert r["age"] == "—"
+    assert r["trigger_counts"] == []
+    assert r["behavior_counts"] == []
+    assert r["action_counts"] == []
     assert r["pattern_text"] == "No incidents recorded in this period."
 
 
