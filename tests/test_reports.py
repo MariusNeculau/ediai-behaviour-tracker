@@ -165,3 +165,20 @@ def test_child_report_with_incident_still_pdf(app, client, child_id):
     res = client.get(f"/api/reports/child/{child_id}?period=term")
     assert res.status_code == 200
     assert res.data[:4] == b"%PDF"
+
+
+def test_aggregate_shared():
+    from reports import _aggregate
+
+    incs = [
+        SimpleNamespace(severity="High", duration=10, trigger="Sensory", type="Behavioural",
+                        interventions=[], occurred_at=datetime(2026, 6, 10, 9, 0)),
+        SimpleNamespace(severity="Medium", duration=None, trigger="Sensory", type="Crisis",
+                        interventions=[], occurred_at=datetime(2026, 6, 9, 14, 0)),
+    ]
+    a = _aggregate(incs, 30)
+    assert a["total_incidents"] == 2
+    assert a["per_week_avg"] == 0.5
+    assert a["top_trigger"] == "Sensory"
+    assert a["avg_duration"] == "10 min"
+    assert a["pattern_text"].startswith("Most incidents were")

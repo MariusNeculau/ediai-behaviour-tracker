@@ -74,35 +74,19 @@ def _peak_time(incidents):
     return "—"
 
 
-def build_child_report(child, incidents, period, today):
-    """View-model pur (dict) pentru raportul unui copil. `school` e completat de endpoint."""
-    window_days = _WINDOW_DAYS[period]
-    start = today - timedelta(days=window_days - 1)
+def _aggregate(incidents, window_days):
+    """Statistici partajate de toate tipurile de raport (copil/clasă/școală)."""
     total = len(incidents)
-
     per_week_avg = round(total / (window_days / 7.0), 1)
     top_severity = _mode([i.severity for i in incidents])
     durations = [i.duration for i in incidents if i.duration is not None]
     avg_duration = f"{round(sum(durations) / len(durations))} min" if durations else "N/A"
-    top_trigger = _mode([i.trigger for i in incidents])
-    top_type = _mode([i.type for i in incidents])
-    peak_time = _peak_time(incidents)
-
-    rows = [
-        {
-            "date": i.occurred_at.strftime("%d %b %Y"),
-            "type": i.type or "—",
-            "severity": i.severity or "—",
-            "trigger": i.trigger or "—",
-            "outcome": i.outcome or "—",
-        }
-        for i in incidents
-    ]
-
-    age = child.age if child.age is not None else "—"
     trigger_counts = _count_dist([i.trigger for i in incidents])
     behavior_counts = _count_dist([i.type for i in incidents])
     action_counts = _count_dist([iv.name for i in incidents for iv in i.interventions])
+    peak_time = _peak_time(incidents)
+    top_trigger = _mode([i.trigger for i in incidents])
+    top_type = _mode([i.type for i in incidents])
 
     if total == 0:
         pattern_text = "No incidents recorded in this period."
@@ -117,27 +101,51 @@ def build_child_report(child, incidents, period, today):
         pattern_text = (", ".join(parts) + ".") if parts else "Incidents were recorded in this period."
 
     return {
-        "school": "",
-        "child_name": child.name,
-        "room_name": child.room.name if child.room else "—",
-        "key_worker": child.key_worker.name if child.key_worker else "—",
-        "period_label": _PERIOD_LABEL[period],
-        "period_range": f"{start.strftime('%d %b %Y')} – {today.strftime('%d %b %Y')}",
-        "generated_on": today.strftime("%d %b %Y"),
         "total_incidents": total,
         "per_week_avg": per_week_avg,
         "top_severity": top_severity,
         "avg_duration": avg_duration,
-        "incident_rows": rows,
-        "top_trigger": top_trigger,
-        "top_type": top_type,
-        "peak_time": peak_time,
-        "age": age,
-        "school_roll": "",
         "trigger_counts": trigger_counts,
         "behavior_counts": behavior_counts,
         "action_counts": action_counts,
+        "peak_time": peak_time,
+        "top_trigger": top_trigger,
+        "top_type": top_type,
         "pattern_text": pattern_text,
+    }
+
+
+def build_child_report(child, incidents, period, today):
+    """View-model pur (dict) pentru raportul unui copil. `school` e completat de endpoint."""
+    window_days = _WINDOW_DAYS[period]
+    start = today - timedelta(days=window_days - 1)
+    agg = _aggregate(incidents, window_days)
+
+    rows = [
+        {
+            "date": i.occurred_at.strftime("%d %b %Y"),
+            "type": i.type or "—",
+            "severity": i.severity or "—",
+            "trigger": i.trigger or "—",
+            "outcome": i.outcome or "—",
+        }
+        for i in incidents
+    ]
+    age = child.age if child.age is not None else "—"
+
+    return {
+        "report_type": "child",
+        "school": "",
+        "school_roll": "",
+        "child_name": child.name,
+        "room_name": child.room.name if child.room else "—",
+        "key_worker": child.key_worker.name if child.key_worker else "—",
+        "age": age,
+        "period_label": _PERIOD_LABEL[period],
+        "period_range": f"{start.strftime('%d %b %Y')} – {today.strftime('%d %b %Y')}",
+        "generated_on": today.strftime("%d %b %Y"),
+        "incident_rows": rows,
+        **agg,
     }
 
 
