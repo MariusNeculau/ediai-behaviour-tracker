@@ -914,6 +914,15 @@ function renderSettings(){
 
   return `
   <div style="max-width:720px">
+    <div class="settings-section" style="background:var(--gray-50);border-left:3px solid var(--primary,#2563eb)">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="font-size:24px">&#127979;</div>
+        <div>
+          <div class="set-name" style="font-size:16px">${SCHOOL.name}</div>
+          <div class="set-role">Roll Number: ${SCHOOL.roll_number||'&mdash;'} &middot; configured in config.py</div>
+        </div>
+      </div>
+    </div>
     <div class="settings-section">
       <h3>&#128104; Students</h3>
       ${studentRows}
