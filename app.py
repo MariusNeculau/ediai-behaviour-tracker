@@ -19,18 +19,8 @@ from datetime import date, datetime
 from flask import Flask, jsonify, render_template, request
 
 import config
-from models import db, Child, Staff, Incident, Intervention
-
-
-def _serialize_child(c):
-    return {
-        "id": c.id,
-        "name": c.name,
-        "room": c.room,
-        "age": c.age,
-        "support": c.support,
-        "keyWorker": c.key_worker.name if c.key_worker else "",
-    }
+from models import db, Child, Staff, Room, Incident, Intervention
+from serializers import serialize_child, serialize_staff, serialize_room
 
 
 def _serialize_incident(i):
@@ -81,11 +71,18 @@ def create_app():
         seed_lookups()
 
     register_routes(app)
+    from settings_api import settings_bp
+    app.register_blueprint(settings_bp)
     return app
 
 
 def seed_lookups():
     """Populează tabelele de catalog din config.py dacă sunt goale."""
+    if Room.query.count() == 0:
+        for name in config.ROOMS:
+            db.session.add(Room(name=name))
+        db.session.commit()
+
     if Intervention.query.count() == 0:
         for name in config.INTERVENTIONS:
             db.session.add(Intervention(name=name))
@@ -98,11 +95,13 @@ def seed_lookups():
 
     if config.SEED_DEMO_DATA and Child.query.count() == 0:
         staff_by_name = {s.name: s for s in Staff.query.all()}
+        room_by_name = {r.name: r for r in Room.query.all()}
         for d in config.DEMO_CHILDREN:
+            room = room_by_name.get(d["room"])
             db.session.add(
                 Child(
                     name=d["name"],
-                    room=d["room"],
+                    room_id=room.id if room else None,
                     age=d.get("age"),
                     support=d.get("support"),
                     key_worker=staff_by_name.get(d.get("keyWorker")),
@@ -123,8 +122,9 @@ def register_routes(app):
             "dashboard.html",
             school=config.SCHOOL,
             config_data=_config_payload(),
-            children=[_serialize_child(c) for c in Child.query.all()],
-            staff=[{"name": s.name, "role": s.role} for s in Staff.query.all()],
+            children=[serialize_child(c) for c in Child.query.filter_by(active=True).all()],
+            staff=[serialize_staff(s) for s in Staff.query.filter_by(active=True).all()],
+            rooms=[serialize_room(r) for r in Room.query.filter_by(active=True).all()],
             incidents=[_serialize_incident(i) for i in Incident.query.all()],
             today=today.isoformat(),
             today_display=today.strftime("%a %d %B %Y"),

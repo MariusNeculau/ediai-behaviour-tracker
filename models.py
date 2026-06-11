@@ -30,6 +30,21 @@ incident_interventions = db.Table(
 )
 
 
+class Room(db.Model):
+    """Clasă / cameră — promovată din string pe Child la entitate proprie."""
+
+    __tablename__ = "room"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(60), nullable=False, unique=True)
+    active = db.Column(db.Boolean, nullable=False, default=True)
+
+    children = db.relationship("Child", back_populates="room")
+
+    def __repr__(self):
+        return f"<Room {self.id} {self.name!r}>"
+
+
 class Child(db.Model):
     """Elev — corespunde array-ului CHILDREN din mockup (l.281)."""
 
@@ -37,16 +52,18 @@ class Child(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)          # ex: "Cian M."
-    room = db.Column(db.String(60), nullable=False)           # ex: "Room 1"
+    room_id = db.Column(db.Integer, db.ForeignKey("room.id"), nullable=False)
+    active = db.Column(db.Boolean, nullable=False, default=True)
     age = db.Column(db.Integer)
     support = db.Column(db.String(20))                        # High | Medium | Low
     key_worker_id = db.Column(db.Integer, db.ForeignKey("staff.id"))
 
+    room = db.relationship("Room", back_populates="children")
     key_worker = db.relationship("Staff", back_populates="children")
     incidents = db.relationship("Incident", back_populates="child", cascade="all, delete-orphan")
 
     def __repr__(self):
-        return f"<Child {self.id} {self.name!r} ({self.room})>"
+        return f"<Child {self.id} {self.name!r} room_id={self.room_id}>"
 
 
 class Staff(db.Model):
@@ -57,6 +74,7 @@ class Staff(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False, unique=True)
     role = db.Column(db.String(60))                          # Teacher | SNA | ...
+    active = db.Column(db.Boolean, nullable=False, default=True)
 
     children = db.relationship("Child", back_populates="key_worker")
     incidents = db.relationship("Incident", back_populates="staff")
