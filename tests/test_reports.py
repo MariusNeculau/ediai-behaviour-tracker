@@ -239,3 +239,28 @@ def test_build_school_report():
     assert r["breakdown_header"] == ["Class", "Students", "Incidents", "Top Trigger"]
     assert r["breakdown_rows"][0] == ["Room 2", "2", "2", "Noise"]
     assert r["breakdown_rows"][1] == ["Room 1", "1", "1", "Sensory"]
+
+
+def test_render_class_report_pdf():
+    from reports import build_class_report, render_report_pdf
+
+    room = SimpleNamespace(id=1, name="Room 1")
+    kids = [SimpleNamespace(id=10, name="Alice", room_id=1)]
+    incs = [_mk_inc(10, "Sensory")]
+    rep = build_class_report(room, kids, incs, "month", date(2026, 6, 11))
+    rep["school"] = "Test School"
+    rep["school_roll"] = "12345B"
+    out = render_report_pdf(rep)
+    assert out[:4] == b"%PDF"
+
+
+def test_render_school_report_pdf():
+    from reports import build_school_report, render_report_pdf
+
+    rooms = [SimpleNamespace(id=1, name="Room 1"), SimpleNamespace(id=2, name="Room 2")]
+    kids = [SimpleNamespace(id=10, name="Alice", room_id=1)]
+    rep = build_school_report(rooms, kids, [], "week", date(2026, 6, 11))
+    rep["school"] = "Test School"
+    rep["school_roll"] = ""
+    out = render_report_pdf(rep)
+    assert out[:4] == b"%PDF"
