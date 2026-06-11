@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDI AI — Behaviour Tracker | {{ school.name }}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#1B5E20;--secondary:#2E7D32;--accent:#1565C0;
+  --crisis:#C62828;--warning:#F9A825;--bg:#F5F7FA;
+  --gray-100:#f1f3f5;--gray-200:#e9ecef;--gray-300:#dee2e6;
+  --gray-500:#adb5bd;--gray-700:#495057;--gray-900:#212529;
+  --shadow:0 2px 8px rgba(0,0,0,.08);--shadow-md:0 4px 16px rgba(0,0,0,.12);
+  --radius:10px;--sw:220px
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--gray-900);display:flex;min-height:100vh}
+
+/* SIDEBAR */
+.sidebar{width:var(--sw);background:var(--primary);color:#fff;display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100;box-shadow:2px 0 8px rgba(0,0,0,.15)}
+.sb-brand{padding:22px 20px 18px;border-bottom:1px solid rgba(255,255,255,.15)}
+.sb-brand .bn{font-size:22px;font-weight:700;letter-spacing:1px}
+.sb-brand .bs{font-size:11px;color:rgba(255,255,255,.7);margin-top:2px;text-transform:uppercase;letter-spacing:.5px}
+.sb-school{padding:10px 20px;background:rgba(0,0,0,.15);font-size:12px;color:rgba(255,255,255,.8)}
+.sb-nav{flex:1;padding:14px 0}
+.nav-item{display:flex;align-items:center;gap:12px;padding:13px 20px;cursor:pointer;transition:background .15s;font-size:14px;color:rgba(255,255,255,.85);border-left:3px solid transparent}
+.nav-item:hover{background:rgba(255,255,255,.1)}
+.nav-item.active{background:rgba(255,255,255,.15);border-left-color:#fff;color:#fff;font-weight:600}
+.nav-icon{font-size:17px;width:22px;text-align:center}
+.sb-footer{padding:14px 20px;border-top:1px solid rgba(255,255,255,.15);font-size:11px;color:rgba(255,255,255,.45)}
+
+/* MAIN */
+.main{margin-left:var(--sw);flex:1;display:flex;flex-direction:column;min-height:100vh}
+.topbar{background:#fff;padding:15px 26px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 4px rgba(0,0,0,.06);position:sticky;top:0;z-index:50}
+.topbar-title{font-size:18px;font-weight:700;color:var(--gray-900)}
+.topbar-right{display:flex;align-items:center;gap:14px}
+.topbar-date{font-size:13px;color:var(--gray-700)}
+.btn-log{background:var(--secondary);color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;transition:background .15s,transform .1s;display:flex;align-items:center;gap:6px}
+.btn-log:hover{background:var(--primary);transform:translateY(-1px)}
+.content{padding:26px;flex:1}
+
+/* STAT CARDS */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px}
+.stat-card{background:#fff;border-radius:var(--radius);padding:20px;box-shadow:var(--shadow);transition:transform .15s,box-shadow .15s;border-top:3px solid var(--gray-200)}
+.stat-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
+.stat-card.alert-card{border-top-color:var(--crisis)}
+.stat-label{font-size:11px;color:var(--gray-700);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;font-weight:600}
+.stat-value{font-size:34px;font-weight:800;color:var(--gray-900)}
+.stat-value.red{color:var(--crisis)}
+.stat-sub{font-size:12px;color:var(--gray-500);margin-top:4px}
+
+/* GRID */
+.section-grid{display:grid;grid-template-columns:1fr 340px;gap:18px}
+.card{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.card-header{padding:15px 20px;border-bottom:1px solid var(--gray-200);display:flex;align-items:center;justify-content:space-between}
+.card-title{font-size:14px;font-weight:700;color:var(--gray-900)}
+.card-sub{font-size:12px;color:var(--gray-500)}
+
+/* TABLE */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{background:var(--gray-100);padding:9px 13px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--gray-700);white-space:nowrap}
+tbody tr{border-bottom:1px solid var(--gray-200);cursor:pointer;transition:background .1s}
+tbody tr:hover{background:#f0f4ff}
+tbody tr:last-child{border-bottom:none}
+td{padding:10px 13px;vertical-align:middle}
+
+/* BADGES */
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px}
+.dot-high{background:var(--crisis)}.dot-medium{background:var(--warning)}.dot-low{background:#43A047}
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.badge-active{background:#FFEBEE;color:var(--crisis)}
+.badge-resolved{background:#E8F5E9;color:#2E7D32}
+.badge-support{background:#E3F2FD;color:var(--accent)}
+.type-badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:500}
+.tc{background:#FFEBEE;color:var(--crisis)}
+.tb{background:#FFF8E1;color:#F57F17}
+.ts{background:#FCE4EC;color:#880E4F}
+.te{background:#E8EAF6;color:#283593}
+.tp{background:#F3E5F5;color:#6A1B9A}
+.to{background:var(--gray-100);color:var(--gray-700)}
+.sup-high{background:#FFEBEE;color:var(--crisis);display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600}
+.sup-medium{background:#FFF8E1;color:#F57F17;display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600}
+.sup-low{background:#E8F5E9;color:#2E7D32;display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600}
+
+/* TIMELINE */
+.timeline{padding:14px 18px}
+.tl-item{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--gray-200)}
+.tl-item:last-child{border-bottom:none}
+.tl-time{font-size:12px;font-weight:700;color:var(--accent);min-width:40px}
+.tl-dot-col{display:flex;flex-direction:column;align-items:center}
+.tl-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:2px}
+.tl-line{width:2px;flex:1;background:var(--gray-200);margin-top:3px}
+.tl-info{flex:1}
+.tl-name{font-size:13px;font-weight:600}
+.tl-desc{font-size:12px;color:var(--gray-700);margin-top:1px}
+
+/* BAR CHART */
+.bar-chart{padding:14px 18px}
+.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+.bar-lbl{font-size:12px;color:var(--gray-700);min-width:38px}
+.bar-track{flex:1;background:var(--gray-200);border-radius:4px;height:20px;overflow:hidden}
+.bar-fill{height:100%;border-radius:4px;background:var(--accent);transition:width .7s ease}
+.bar-fill.peak{background:var(--crisis)}
+.bar-count{font-size:12px;font-weight:600;color:var(--gray-700);min-width:18px;text-align:right}
+
+/* FORM */
+.form-wrap{max-width:720px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.form-group{display:flex;flex-direction:column;gap:6px}
+.form-group.full{grid-column:span 2}
+label{font-size:13px;font-weight:600;color:var(--gray-700)}
+input,select,textarea{border:1.5px solid var(--gray-300);border-radius:8px;padding:10px 12px;font-size:14px;font-family:inherit;color:var(--gray-900);background:#fff;transition:border-color .15s,box-shadow .15s;width:100%}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--secondary);box-shadow:0 0 0 3px rgba(46,125,50,.12)}
+textarea{resize:vertical;min-height:80px}
+.sev-btns{display:flex;gap:8px}
+.sev-btn{flex:1;padding:11px;border:2px solid var(--gray-300);border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;background:#fff;transition:all .15s;text-align:center}
+.sev-btn.low.sel{border-color:#43A047;background:#E8F5E9;color:#2E7D32}
+.sev-btn.medium.sel{border-color:var(--warning);background:#FFF8E1;color:#E65100}
+.sev-btn.high.sel{border-color:var(--crisis);background:#FFEBEE;color:var(--crisis)}
+.sev-btn:hover{opacity:.8}
+.checks{display:flex;flex-wrap:wrap;gap:7px}
+.chk-item{display:flex;align-items:center;gap:5px;background:var(--gray-100);border:1.5px solid var(--gray-300);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:12px;transition:all .15s;user-select:none}
+.chk-item:hover,.chk-item.sel{border-color:var(--secondary);background:#E8F5E9}
+.chk-item input{width:auto;accent-color:var(--secondary)}
+.btn-primary{background:var(--secondary);color:#fff;border:none;padding:14px;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;transition:all .15s;width:100%;margin-top:6px}
+.btn-primary:hover{background:var(--primary);transform:translateY(-1px)}
+.btn-accent{background:var(--accent);color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s}
+.btn-accent:hover{opacity:.9;transform:translateY(-1px)}
+.btn-outline{background:#fff;color:var(--gray-700);border:1.5px solid var(--gray-300);padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn-outline:hover{border-color:var(--secondary);color:var(--secondary)}
+.form-section{background:#fff;border-radius:var(--radius);padding:24px;box-shadow:var(--shadow);margin-bottom:20px}
+.form-section h3{font-size:15px;font-weight:700;margin-bottom:18px;padding-bottom:10px;border-bottom:1px solid var(--gray-200);color:var(--primary)}
+
+/* PROFILES */
+.profiles-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+.child-card{background:#fff;border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);cursor:pointer;transition:transform .15s,box-shadow .15s;border-left:4px solid var(--gray-300)}
+.child-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
+.child-card.high{border-left-color:var(--crisis)}
+.child-card.medium{border-left-color:var(--warning)}
+.child-card.low{border-left-color:#43A047}
+.child-name{font-size:16px;font-weight:700;margin-bottom:3px}
+.child-class{font-size:12px;color:var(--gray-700);margin-bottom:12px}
+.child-row{display:flex;justify-content:space-between;align-items:center}
+.child-inc{font-size:24px;font-weight:800;color:var(--accent)}
+.child-trend{font-size:20px}
+.child-last{font-size:11px;color:var(--gray-500);margin-top:8px}
+.trend-up{color:var(--crisis)}
+.trend-stable{color:var(--warning)}
+.trend-down{color:#43A047}
+
+/* DETAIL */
+.detail-header{background:#fff;border-radius:var(--radius);padding:22px;box-shadow:var(--shadow);margin-bottom:18px;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.det-name{font-size:22px;font-weight:800}
+.det-meta{font-size:13px;color:var(--gray-700);margin-top:4px}
+.mini-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+.mini-stat{background:#fff;border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);text-align:center}
+.mini-val{font-size:22px;font-weight:800;color:var(--accent)}
+.mini-lbl{font-size:11px;color:var(--gray-700);margin-top:3px}
+.patterns-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}
+.top-list{padding:14px 18px}
+.top-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--gray-200)}
+.top-item:last-child{border-bottom:none}
+.top-item-name{font-size:13px;font-weight:500}
+.top-item-count{background:var(--accent);color:#fff;border-radius:20px;padding:2px 10px;font-size:12px;font-weight:700}
+
+/* FILTERS */
+.filters{display:flex;gap:12px;margin-bottom:18px;align-items:center;flex-wrap:wrap}
+.filters input,.filters select{width:auto;padding:8px 12px;font-size:13px}
+.search-box{background:#fff;border:1.5px solid var(--gray-300);border-radius:8px;padding:8px 12px;font-size:13px;width:200px}
+.search-box:focus{outline:none;border-color:var(--secondary)}
+
+/* REPORTS */
+.report-gen{background:#fff;border-radius:var(--radius);padding:24px;box-shadow:var(--shadow);margin-bottom:22px;max-width:640px}
+.report-gen h3{font-size:15px;font-weight:700;margin-bottom:16px;color:var(--primary)}
+.report-row{display:flex;gap:14px;margin-bottom:14px;align-items:flex-end}
+.report-doc-wrap{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.report-doc-header{background:var(--primary);color:#fff;padding:20px 30px}
+.report-doc-body{padding:28px 30px;font-family:Georgia,serif}
+.rdh-title{font-size:20px;font-weight:700}
+.rdh-sub{font-size:13px;opacity:.8;margin-top:4px}
+.rdb-meta{display:flex;gap:20px;font-size:13px;color:var(--gray-700);margin-bottom:18px;flex-wrap:wrap}
+.rdb-meta span{display:flex;align-items:center;gap:5px}
+.rdb-stats{display:flex;gap:12px;margin-bottom:22px}
+.rdb-stat{flex:1;text-align:center;padding:14px;background:var(--gray-100);border-radius:8px}
+.rdb-sv{font-size:22px;font-weight:800;color:var(--primary)}
+.rdb-sl{font-size:11px;color:var(--gray-700);margin-top:2px}
+.rdb-section{margin-bottom:18px}
+.rdb-section h4{font-size:14px;font-weight:700;color:var(--gray-900);margin-bottom:10px;border-bottom:1px solid var(--gray-200);padding-bottom:6px}
+.rdb-section p{font-size:13px;line-height:1.7;color:var(--gray-700)}
+.rec-item{display:flex;gap:8px;padding:8px 0;border-bottom:1px solid var(--gray-100);font-size:13px}
+.rec-icon{color:var(--secondary);font-weight:700}
+.report-footer{margin-top:20px;padding-top:12px;border-top:1px solid var(--gray-300);display:flex;justify-content:space-between;font-size:11px;color:var(--gray-500)}
+
+/* RECENT REPORTS */
+.recent-reports{background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-top:22px}
+.dl-btn{background:none;border:none;color:var(--accent);cursor:pointer;font-size:18px}
+
+/* SETTINGS */
+.settings-section{background:#fff;border-radius:var(--radius);padding:22px;box-shadow:var(--shadow);margin-bottom:18px}
+.settings-section h3{font-size:15px;font-weight:700;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--gray-200);color:var(--primary)}
+.set-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--gray-100)}
+.set-row:last-child{border-bottom:none}
+.set-name{font-size:14px;font-weight:500}
+.set-role{font-size:12px;color:var(--gray-500)}
+.tag{display:inline-block;padding:4px 10px;background:var(--gray-100);border-radius:20px;font-size:12px;margin:3px}
+.gdpr{background:#E3F2FD;border:1px solid #90CAF9;border-radius:8px;padding:16px;font-size:13px;color:#0D47A1;display:flex;gap:10px;align-items:flex-start}
+
+/* MODAL */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:center;justify-content:center;animation:fadeIn .15s ease}
+.modal{background:#fff;border-radius:12px;padding:26px;max-width:580px;width:92%;box-shadow:var(--shadow-md);animation:slideUp .2s ease;max-height:90vh;overflow-y:auto}
+.modal-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px}
+.modal-title{font-size:17px;font-weight:700}
+.modal-close{background:none;border:none;font-size:22px;cursor:pointer;color:var(--gray-500);line-height:1;padding:0}
+.modal-close:hover{color:var(--gray-900)}
+.modal-row{display:flex;gap:8px;margin-bottom:11px;font-size:14px}
+.modal-lbl{font-weight:700;color:var(--gray-700);min-width:130px;flex-shrink:0}
+.modal-val{color:var(--gray-900)}
+.modal-divider{border:none;border-top:1px solid var(--gray-200);margin:14px 0}
+
+/* TOAST */
+.toast{position:fixed;bottom:26px;right:26px;background:#2E7D32;color:#fff;padding:14px 22px;border-radius:10px;font-size:14px;font-weight:700;box-shadow:var(--shadow-md);z-index:300;animation:slideUp .2s ease;display:flex;align-items:center;gap:8px}
+
+/* BACK */
+.back-btn{display:inline-flex;align-items:center;gap:6px;color:var(--accent);cursor:pointer;font-size:14px;font-weight:600;background:none;border:none;padding:0;margin-bottom:14px}
+.back-btn:hover{opacity:.75}
+
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideUp{from{transform:translateY(18px);opacity:0}to{transform:translateY(0);opacity:1}}
+.fade-in{animation:fadeIn .25s ease}
+
+@media(max-width:900px){
+  .stats-row{grid-template-columns:1fr 1fr}
+  .section-grid{grid-template-columns:1fr}
+  .mini-stats{grid-template-columns:1fr 1fr}
+  .patterns-grid{grid-template-columns:1fr}
+}
+@media(max-width:640px){
+  .form-grid{grid-template-columns:1fr}
+  .form-group.full{grid-column:span 1}
+  .content{padding:16px}
+  .report-row{flex-direction:column}
+  .rdb-stats{flex-wrap:wrap}
+}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sb-brand">
+    <div class="bn">EDI AI</div>
+    <div class="bs">Behaviour Tracker</div>
+  </div>
+  <div class="sb-school">&#127979; {{ school.name }}</div>
+  <nav class="sb-nav">
+    <div class="nav-item active" onclick="showTab('dashboard')"><span class="nav-icon">&#128202;</span> Dashboard</div>
+    <div class="nav-item" onclick="showTab('log')"><span class="nav-icon">&#43;</span> Log Incident</div>
+    <div class="nav-item" onclick="showTab('profiles')"><span class="nav-icon">&#128104;</span> Child Profiles</div>
+    <div class="nav-item" onclick="showTab('reports')"><span class="nav-icon">&#128196;</span> Reports</div>
+    <div class="nav-item" onclick="showTab('settings')"><span class="nav-icon">&#9881;</span> Settings</div>
+  </nav>
+  <div class="sb-footer">v1.0.0 &nbsp;&#183;&nbsp; GDPR Compliant</div>
+</aside>
+
+<main class="main">
+  <div class="topbar">
+    <div class="topbar-title" id="topbar-title">Dashboard</div>
+    <div class="topbar-right">
+      <div class="topbar-date">{{ today_display }}</div>
+      <button class="btn-log" onclick="showTab('log')">&#43; Log Incident</button>
+    </div>
+  </div>
+  <div class="content fade-in" id="content"></div>
+</main>
+
+<div id="overlay" style="display:none"></div>
+<div id="toast-el" class="toast" style="display:none"></div>
+
+<!-- ─── DATE INJECTATE DIN BACKEND (config.py + SQLite) ─────────────────────── -->
+<script>
+const SCHOOL    = {{ school | tojson }};
+const CONFIG    = {{ config_data | tojson }};
+const CHILDREN  = {{ children | tojson }};
+const STAFF     = {{ staff | tojson }};
+let   INCIDENTS = {{ incidents | tojson }};
+const TODAY     = {{ today | tojson }};   // ISO yyyy-mm-dd din server
+</script>
+
+<!-- ─── LOGICA UI (portată din legacy/index.html, generică) ─────────────────── -->
+<script>
+{% raw %}
+let nextId = INCIDENTS.reduce((m,i)=>Math.max(m,i.id),0)+1;
+let currentTab = 'dashboard';
+let selectedSeverity = '';
+let selectedInterventions = new Set();
+let profileFilter = '';
+let profileSearch = '';
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+const child = id => CHILDREN.find(c => c.id === id);
+
+function typeCls(t){
+  const m={Crisis:'tc',Behavioural:'tb','Self-Injury':'ts',Elopement:'te','Property Destruction':'tp',Other:'to'};
+  return m[t]||'to';
+}
+function sevDot(s){
+  if(s==='High') return '<span class="dot dot-high"></span>';
+  if(s==='Medium') return '<span class="dot dot-medium"></span>';
+  return '<span class="dot dot-low"></span>';
+}
+function supCls(s){return s==='High'?'sup-high':s==='Medium'?'sup-medium':'sup-low';}
+function fmtDate(d){
+  if(!d) return '';
+  const [y,m,day]=d.split('-');
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${parseInt(day)} ${months[parseInt(m)-1]} ${y}`;
+}
+function isoOffset(days){
+  const d=new Date(TODAY);
+  d.setDate(d.getDate()+days);
+  return d.toISOString().slice(0,10);
+}
+function childIncidents(id){return INCIDENTS.filter(i=>i.childId===id);}
+function childIncidentsMonth(id){return INCIDENTS.filter(i=>i.childId===id && i.date.startsWith(TODAY.slice(0,7)));}
+function trend(id){
+  const wk1=isoOffset(-7), wk2=isoOffset(-14);
+  const thisWeek = INCIDENTS.filter(i=>i.childId===id && i.date>=wk1).length;
+  const lastWeek = INCIDENTS.filter(i=>i.childId===id && i.date>=wk2 && i.date<wk1).length;
+  if(thisWeek>lastWeek) return {icon:'↑',cls:'trend-up'};
+  if(thisWeek<lastWeek) return {icon:'↓',cls:'trend-down'};
+  return {icon:'→',cls:'trend-stable'};
+}
+function topTriggers(incidents){
+  const m={};
+  incidents.forEach(i=>{m[i.trigger]=(m[i.trigger]||0)+1;});
+  return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,3);
+}
+function topInterventions(incidents){
+  const m={};
+  incidents.forEach(i=>i.interventions.forEach(v=>{m[v]=(m[v]||0)+1;}));
+  return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,3);
+}
+function incidentsByHour(incidents){
+  const hrs={9:0,10:0,11:0,12:0,13:0,14:0,15:0};
+  incidents.forEach(i=>{
+    const h=parseInt(i.time.split(':')[0]);
+    if(hrs[h]!==undefined) hrs[h]++;
+  });
+  return hrs;
+}
+function incidentsByDay(incidents){
+  const days={Mon:0,Tue:0,Wed:0,Thu:0,Fri:0};
+  const dayMap={1:'Mon',2:'Tue',3:'Wed',4:'Thu',5:'Fri',6:'Sat',0:'Sun'};
+  incidents.forEach(i=>{
+    const d=new Date(i.date);
+    const dn=dayMap[d.getDay()];
+    if(days[dn]!==undefined) days[dn]++;
+  });
+  return days;
+}
+
+function showToast(msg){
+  const t=document.getElementById('toast-el');
+  t.innerHTML='&#10003; '+msg;
+  t.style.display='flex';
+  setTimeout(()=>{t.style.display='none';},3000);
+}
+
+function closeOverlay(){document.getElementById('overlay').style.display='none';}
+
+// ─── TABS ────────────────────────────────────────────────────────────────────
+const TAB_TITLES={dashboard:'Dashboard',log:'Log Incident',profiles:'Child Profiles',reports:'Reports',settings:'Settings'};
+function showTab(tab, extra){
+  currentTab=tab;
+  document.querySelectorAll('.nav-item').forEach((el,i)=>{
+    const tabs=['dashboard','log','profiles','reports','settings'];
+    el.classList.toggle('active', tabs[i]===tab);
+  });
+  document.getElementById('topbar-title').textContent=TAB_TITLES[tab]||tab;
+  const c=document.getElementById('content');
+  c.className='content fade-in';
+  void c.offsetWidth;
+  if(tab==='dashboard') c.innerHTML=renderDashboard();
+  else if(tab==='log') {c.innerHTML=renderLog(); initLogForm();}
+  else if(tab==='profiles') c.innerHTML=renderProfiles();
+  else if(tab==='child-detail') c.innerHTML=renderChildDetail(extra);
+  else if(tab==='reports') c.innerHTML=renderReports();
+  else if(tab==='settings') c.innerHTML=renderSettings();
+}
+
+// ─── DASHBOARD ───────────────────────────────────────────────────────────────
+function renderDashboard(){
+  const todayInc = INCIDENTS.filter(i=>i.date===TODAY).sort((a,b)=>b.time.localeCompare(a.time));
+  const activeCrises = INCIDENTS.filter(i=>i.status==='Active').length;
+  const hourData = incidentsByHour(INCIDENTS);
+  const maxH = Math.max(...Object.values(hourData));
+
+  const recentRows = todayInc.concat(
+    INCIDENTS.filter(i=>i.date!==TODAY).sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time))
+  ).slice(0,10);
+
+  const tableRows = recentRows.map(i=>{
+    const c=child(i.childId);
+    return `<tr onclick="showIncidentModal(${i.id})">
+      <td><strong>${i.time}</strong><br><span style="font-size:11px;color:var(--gray-500)">${fmtDate(i.date)}</span></td>
+      <td>${c?c.name:'—'}</td>
+      <td><span style="font-size:12px;color:var(--gray-700)">${c?c.room:'—'}</span></td>
+      <td><span class="type-badge ${typeCls(i.type)}">${i.type}</span></td>
+      <td>${sevDot(i.severity)}<span style="font-size:12px">${i.severity}</span></td>
+      <td>${i.trigger}</td>
+      <td style="font-size:12px">${i.staff}</td>
+      <td><span class="badge ${i.status==='Active'?'badge-active':i.status==='Resolved'?'badge-resolved':'badge-support'}">${i.status}</span></td>
+    </tr>`;
+  }).join('');
+
+  const timelineItems = todayInc.slice(0,6).map((i,idx)=>{
+    const c=child(i.childId);
+    const dotColor=i.severity==='High'?'var(--crisis)':i.severity==='Medium'?'var(--warning)':'#43A047';
+    return `<div class="tl-item">
+      <div class="tl-time">${i.time}</div>
+      <div class="tl-dot-col">
+        <div class="tl-dot" style="background:${dotColor}"></div>
+        ${idx<todayInc.slice(0,6).length-1?'<div class="tl-line"></div>':''}
+      </div>
+      <div class="tl-info">
+        <div class="tl-name">${c?c.name:'—'}</div>
+        <div class="tl-desc">${i.type} &middot; ${i.severity}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  const barRows = Object.entries(hourData).map(([hr,cnt])=>{
+    const pct = maxH>0?Math.round((cnt/maxH)*100):0;
+    const isPeak = cnt===maxH && cnt>0;
+    return `<div class="bar-row">
+      <div class="bar-lbl">${hr}:00</div>
+      <div class="bar-track"><div class="bar-fill${isPeak?' peak':''}" style="width:${pct}%"></div></div>
+      <div class="bar-count">${cnt}</div>
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Total Incidents Today</div>
+      <div class="stat-value">${todayInc.length}</div>
+      <div class="stat-sub">Across all classes</div>
+    </div>
+    <div class="stat-card${activeCrises>0?' alert-card':''}">
+      <div class="stat-label">Active Crises</div>
+      <div class="stat-value${activeCrises>0?' red':''}">${activeCrises}</div>
+      <div class="stat-sub">${activeCrises>0?'Requires attention':'All resolved'}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Children Monitored</div>
+      <div class="stat-value">${CHILDREN.length}</div>
+      <div class="stat-sub">Across ${CONFIG.rooms.length} classrooms</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Staff On Duty</div>
+      <div class="stat-value">${STAFF.length}</div>
+      <div class="stat-sub">Today</div>
+    </div>
+  </div>
+
+  <div class="section-grid">
+    <div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Recent Incidents</div>
+          <div class="card-sub">Click a row for details</div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Time</th><th>Child</th><th>Class</th><th>Type</th><th>Severity</th><th>Trigger</th><th>Staff</th><th>Status</th></tr></thead>
+            <tbody>${tableRows||'<tr><td colspan="8" style="padding:16px;color:var(--gray-500);text-align:center">No incidents recorded yet</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <div class="card">
+        <div class="card-header"><div class="card-title">Today's Timeline</div></div>
+        <div class="timeline">${timelineItems||'<div style="padding:12px;color:var(--gray-500);font-size:13px">No incidents today</div>'}</div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Incidents by Time of Day</div><div class="card-sub">All time</div></div>
+        <div class="bar-chart">${barRows}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ─── LOG INCIDENT ─────────────────────────────────────────────────────────────
+function renderLog(){
+  const childOpts = CHILDREN.map(c=>`<option value="${c.id}">${c.name} — ${c.room}</option>`).join('')
+    || '<option value="">No children added yet</option>';
+  const staffOpts = STAFF.map(s=>`<option>${s.name}</option>`).join('');
+  const typeOpts = CONFIG.incident_types.map(t=>`<option>${t}</option>`).join('');
+  const triggerOpts = CONFIG.triggers.map(t=>`<option>${t}</option>`).join('');
+  const outcomeOpts = CONFIG.outcomes.map(o=>`<option>${o}</option>`).join('');
+  const checks = CONFIG.interventions.map(v=>`<label class="chk-item" id="chk-${v.replace(/ /g,'_')}"><input type="checkbox" value="${v}" onchange="toggleIntervention('${v}')"> ${v}</label>`).join('');
+
+  const now = new Date();
+  const timeStr = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+  return `
+  <div class="form-wrap">
+    <div class="form-section">
+      <h3>&#128221; Incident Details</h3>
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="f-child">Child *</label>
+          <select id="f-child" onchange="autoFillRoom()">${childOpts}</select>
+        </div>
+        <div class="form-group">
+          <label for="f-room">Class / Room</label>
+          <input type="text" id="f-room" readonly style="background:var(--gray-100)">
+        </div>
+        <div class="form-group">
+          <label for="f-date">Date *</label>
+          <input type="date" id="f-date" value="${TODAY}">
+        </div>
+        <div class="form-group">
+          <label for="f-time">Time *</label>
+          <input type="time" id="f-time" value="${timeStr}">
+        </div>
+        <div class="form-group">
+          <label for="f-type">Incident Type *</label>
+          <select id="f-type">${typeOpts}</select>
+        </div>
+        <div class="form-group">
+          <label for="f-trigger">Trigger *</label>
+          <select id="f-trigger">${triggerOpts}</select>
+        </div>
+        <div class="form-group full">
+          <label>Severity *</label>
+          <div class="sev-btns">
+            <button class="sev-btn low" onclick="setSeverity('Low')">&#128994; Low</button>
+            <button class="sev-btn medium" onclick="setSeverity('Medium')">&#128993; Medium</button>
+            <button class="sev-btn high" onclick="setSeverity('High')">&#128308; High</button>
+          </div>
+        </div>
+        <div class="form-group full">
+          <label for="f-desc">Behaviour Description *</label>
+          <textarea id="f-desc" placeholder="Describe what happened, what the child was doing, and the context…" rows="4"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="f-duration">Duration (minutes)</label>
+          <input type="number" id="f-duration" min="1" max="180" placeholder="e.g. 12">
+        </div>
+        <div class="form-group">
+          <label for="f-outcome">Outcome</label>
+          <select id="f-outcome">${outcomeOpts}</select>
+        </div>
+        <div class="form-group full">
+          <label>Interventions Used</label>
+          <div class="checks">${checks}</div>
+        </div>
+        <div class="form-group">
+          <label for="f-staff">Staff Member *</label>
+          <select id="f-staff">${staffOpts}</select>
+        </div>
+        <div class="form-group">
+          &nbsp;
+        </div>
+        <div class="form-group full">
+          <label for="f-notes">Additional Notes</label>
+          <textarea id="f-notes" placeholder="Any additional context, parent contact, follow-up required…" rows="3"></textarea>
+        </div>
+      </div>
+    </div>
+    <button class="btn-primary" onclick="saveIncident()">&#10003; Save Incident</button>
+  </div>`;
+}
+
+function initLogForm(){
+  autoFillRoom();
+  setSeverity('Medium');
+}
+function autoFillRoom(){
+  const sel=document.getElementById('f-child');
+  const c=CHILDREN.find(x=>x.id==sel.value);
+  document.getElementById('f-room').value=c?c.room:'';
+}
+function setSeverity(s){
+  selectedSeverity=s;
+  document.querySelectorAll('.sev-btn').forEach(b=>{
+    b.classList.remove('sel');
+    if(b.textContent.includes(s)) b.classList.add('sel');
+  });
+}
+function toggleIntervention(v){
+  if(selectedInterventions.has(v)) selectedInterventions.delete(v);
+  else selectedInterventions.add(v);
+  const el=document.getElementById('chk-'+v.replace(/ /g,'_'));
+  if(el) el.classList.toggle('sel',selectedInterventions.has(v));
+}
+async function saveIncident(){
+  const childId=parseInt(document.getElementById('f-child').value);
+  const date=document.getElementById('f-date').value;
+  const time=document.getElementById('f-time').value;
+  const type=document.getElementById('f-type').value;
+  const trigger=document.getElementById('f-trigger').value;
+  const desc=document.getElementById('f-desc').value.trim();
+  const duration=parseInt(document.getElementById('f-duration').value)||0;
+  const outcome=document.getElementById('f-outcome').value;
+  const staff=document.getElementById('f-staff').value;
+  const notes=document.getElementById('f-notes').value.trim();
+  if(!childId){alert('Please add a child first (Settings) and select one.');return;}
+  if(!desc){alert('Please enter a behaviour description.');return;}
+  if(!selectedSeverity){alert('Please select a severity level.');return;}
+  const payload={childId,date,time,type,severity:selectedSeverity,trigger,
+    description:desc,duration,outcome,staff,notes,interventions:[...selectedInterventions]};
+  try{
+    const res=await fetch('/api/incidents',{method:'POST',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(!res.ok){
+      const e=await res.json().catch(()=>({}));
+      alert('Save failed: '+(e.error||('HTTP '+res.status)));
+      return;
+    }
+    const saved=await res.json();
+    INCIDENTS.push(saved);
+    selectedInterventions=new Set();
+    selectedSeverity='';
+    showToast('Incident saved');
+    showTab('dashboard');
+  }catch(err){
+    alert('Network error: '+err.message);
+  }
+}
+
+// ─── PROFILES ────────────────────────────────────────────────────────────────
+function renderProfiles(){
+  const rooms=['All Rooms', ...CONFIG.rooms];
+  const roomOpts=rooms.map(r=>`<option${profileFilter===r?' selected':''}>${r}</option>`).join('');
+
+  let filtered=CHILDREN;
+  if(profileFilter && profileFilter!=='All Rooms') filtered=filtered.filter(c=>c.room===profileFilter);
+  if(profileSearch) filtered=filtered.filter(c=>c.name.toLowerCase().includes(profileSearch.toLowerCase()));
+
+  const cards=filtered.map(c=>{
+    const inc=childIncidentsMonth(c.id).length;
+    const t=trend(c.id);
+    const last=childIncidents(c.id).sort((a,b)=>b.date.localeCompare(a.date))[0];
+    return `<div class="child-card ${c.support.toLowerCase()}" onclick="showChildDetail(${c.id})">
+      <div class="child-name">${c.name}</div>
+      <div class="child-class">${c.room} &middot; <span class="${supCls(c.support)}">${c.support} Support</span></div>
+      <div class="child-row">
+        <div>
+          <div style="font-size:11px;color:var(--gray-500);margin-bottom:2px">This month</div>
+          <div class="child-inc">${inc}</div>
+        </div>
+        <div class="child-trend ${t.cls}" title="${t.cls==='trend-up'?'Increasing':t.cls==='trend-down'?'Decreasing':'Stable'}">${t.icon}</div>
+      </div>
+      <div class="child-last">Last: ${last?fmtDate(last.date)+' · '+last.type:'No incidents'}</div>
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="filters">
+    <input class="search-box" type="text" placeholder="&#128269; Search by name…" value="${profileSearch}" oninput="profileSearch=this.value;document.getElementById('content').innerHTML=renderProfiles()">
+    <select onchange="profileFilter=this.value;document.getElementById('content').innerHTML=renderProfiles()">${roomOpts}</select>
+    <div style="font-size:13px;color:var(--gray-500)">${filtered.length} children</div>
+  </div>
+  <div class="profiles-grid">${cards||'<div style="color:var(--gray-500);font-size:14px">No children added yet. Add children in Settings.</div>'}</div>`;
+}
+
+function showChildDetail(id){
+  currentTab='child-detail';
+  document.getElementById('topbar-title').textContent='Child Profile';
+  const c=document.getElementById('content');
+  c.className='content fade-in';
+  void c.offsetWidth;
+  c.innerHTML=renderChildDetail(id);
+}
+
+function renderChildDetail(id){
+  const c=CHILDREN.find(x=>x.id==id);
+  if(!c) return '<p>Not found.</p>';
+  const allInc=childIncidents(c.id).sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));
+  const monthInc=childIncidentsMonth(c.id);
+  const avgPerWeek=(monthInc.length/4).toFixed(1);
+  const triggers=topTriggers(allInc);
+  const ints=topInterventions(allInc);
+  const hourData=incidentsByHour(allInc);
+  const dayData=incidentsByDay(allInc);
+  const maxH=Math.max(...Object.values(hourData),1);
+  const maxD=Math.max(...Object.values(dayData),1);
+
+  const hourBars=Object.entries(hourData).map(([hr,cnt])=>`
+    <div class="bar-row">
+      <div class="bar-lbl">${hr}:00</div>
+      <div class="bar-track"><div class="bar-fill${cnt===maxH&&cnt>0?' peak':''}" style="width:${Math.round(cnt/maxH*100)}%"></div></div>
+      <div class="bar-count">${cnt}</div>
+    </div>`).join('');
+
+  const dayBars=Object.entries(dayData).map(([d,cnt])=>`
+    <div class="bar-row">
+      <div class="bar-lbl">${d}</div>
+      <div class="bar-track"><div class="bar-fill${cnt===maxD&&cnt>0?' peak':''}" style="width:${Math.round(cnt/maxD*100)}%"></div></div>
+      <div class="bar-count">${cnt}</div>
+    </div>`).join('');
+
+  const incRows=allInc.slice(0,10).map(i=>`<tr onclick="showIncidentModal(${i.id})">
+    <td>${fmtDate(i.date)} ${i.time}</td>
+    <td><span class="type-badge ${typeCls(i.type)}">${i.type}</span></td>
+    <td>${sevDot(i.severity)}${i.severity}</td>
+    <td>${i.trigger}</td>
+    <td>${i.duration?i.duration+' min':'—'}</td>
+    <td><span class="badge ${i.status==='Active'?'badge-active':'badge-resolved'}">${i.status}</span></td>
+  </tr>`).join('');
+
+  return `
+  <button class="back-btn" onclick="showTab('profiles')">&#8592; Back to Profiles</button>
+  <div class="detail-header">
+    <div>
+      <div class="det-name">${c.name}</div>
+      <div class="det-meta">${c.room} &middot; Age ${c.age} &middot; Key Worker: ${c.keyWorker}</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <span class="${supCls(c.support)}" style="font-size:14px">${c.support} Support</span>
+      <button class="btn-accent" onclick="showReportModal('${c.name}')">&#128196; Generate Report</button>
+    </div>
+  </div>
+  <div class="mini-stats">
+    <div class="mini-stat"><div class="mini-val">${monthInc.length}</div><div class="mini-lbl">Incidents This Month</div></div>
+    <div class="mini-stat"><div class="mini-val">${avgPerWeek}</div><div class="mini-lbl">Avg Per Week</div></div>
+    <div class="mini-stat"><div class="mini-val" style="font-size:15px">${triggers[0]?triggers[0][0]:'—'}</div><div class="mini-lbl">Most Common Trigger</div></div>
+    <div class="mini-stat"><div class="mini-val" style="font-size:13px">${ints[0]?ints[0][0]:'—'}</div><div class="mini-lbl">Top Intervention</div></div>
+  </div>
+  <div class="card" style="margin-bottom:18px">
+    <div class="card-header"><div class="card-title">Incident History</div><div class="card-sub">Showing most recent 10</div></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Date & Time</th><th>Type</th><th>Severity</th><th>Trigger</th><th>Duration</th><th>Status</th></tr></thead>
+        <tbody>${incRows||'<tr><td colspan="6" style="padding:16px;color:var(--gray-500);text-align:center">No incidents recorded</td></tr>'}</tbody>
+      </table>
+    </div>
+  </div>
+  <div class="patterns-grid">
+    <div class="card">
+      <div class="card-header"><div class="card-title">Incidents by Time of Day</div></div>
+      <div class="bar-chart">${hourBars}</div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">Incidents by Day of Week</div></div>
+      <div class="bar-chart">${dayBars}</div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">Top Triggers</div></div>
+      <div class="top-list">${triggers.map(([t,n])=>`<div class="top-item"><div class="top-item-name">${t}</div><div class="top-item-count">${n}</div></div>`).join('')||'<div style="color:var(--gray-500);font-size:13px">No data</div>'}</div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">Most Effective Interventions</div></div>
+      <div class="top-list">${ints.map(([v,n])=>`<div class="top-item"><div class="top-item-name">${v}</div><div class="top-item-count">${n}</div></div>`).join('')||'<div style="color:var(--gray-500);font-size:13px">No data</div>'}</div>
+    </div>
+  </div>`;
+}
+
+// ─── REPORTS ─────────────────────────────────────────────────────────────────
+function renderReports(){
+  const childOpts=CHILDREN.map(c=>`<option>${c.name}</option>`).join('')||'<option value="">No children added yet</option>';
+  // Blank slate: niciun raport generat încă.
+  const recentReports=[];
+  const reportRows=recentReports.map(r=>`<tr>
+    <td><strong style="font-size:13px">${r.name}</strong></td>
+    <td><span class="badge badge-resolved">${r.type}</span></td>
+    <td style="font-size:13px">${r.child}</td>
+    <td style="font-size:13px;color:var(--gray-500)">${r.date}</td>
+    <td><button class="dl-btn" onclick="showToast('Downloading ${r.name}…')">&#8681;</button></td>
+  </tr>`).join('');
+
+  return `
+  <div class="report-gen">
+    <h3>&#128196; Generate Report</h3>
+    <div class="form-grid" style="max-width:100%">
+      <div class="form-group">
+        <label>Report Type</label>
+        <select id="r-type" onchange="toggleReportChild()">
+          <option>Individual Child</option>
+          <option>Class Summary</option>
+          <option>Whole School</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Time Period</label>
+        <select id="r-period">
+          <option>This Week</option>
+          <option selected>This Month</option>
+          <option>This Term</option>
+        </select>
+      </div>
+      <div class="form-group" id="r-child-wrap">
+        <label>Child</label>
+        <select>${childOpts}</select>
+      </div>
+      <div class="form-group" style="align-self:flex-end">
+        <button class="btn-accent" style="width:100%;padding:11px" onclick="showToast('Report generation not yet implemented')">&#128196; Generate Report</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="recent-reports">
+    <div class="card-header" style="padding:14px 18px"><div class="card-title">Recent Reports</div></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>File</th><th>Type</th><th>Subject</th><th>Generated</th><th></th></tr></thead>
+        <tbody>${reportRows||'<tr><td colspan="5" style="padding:16px;color:var(--gray-500);text-align:center">No reports generated yet</td></tr>'}</tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="margin-top:24px">
+    <div style="font-size:13px;font-weight:700;color:var(--gray-700);margin-bottom:12px;text-transform:uppercase;letter-spacing:.5px">Sample Report Preview</div>
+    <div class="report-doc-wrap">
+      <div class="report-doc-header">
+        <div class="rdh-title">&#128196; EDI AI Behaviour Report</div>
+        <div class="rdh-sub">Generated by EDI AI &middot; ${SCHOOL.name}</div>
+      </div>
+      <div class="report-doc-body">
+        <div class="rdb-meta">
+          <span>&#128100; <strong>Child:</strong> Sample Student</span>
+          <span>&#127979; <strong>Class:</strong> Sample Class</span>
+          <span>&#128197; <strong>Period:</strong> Current Month</span>
+          <span>&#128084; <strong>Key Worker:</strong> Sample Key Worker</span>
+        </div>
+        <div class="rdb-stats">
+          <div class="rdb-stat"><div class="rdb-sv">2</div><div class="rdb-sl">Total Incidents</div></div>
+          <div class="rdb-stat"><div class="rdb-sv">0.5</div><div class="rdb-sl">Per Week Avg</div></div>
+          <div class="rdb-stat"><div class="rdb-sv">Medium</div><div class="rdb-sl">Avg Severity</div></div>
+          <div class="rdb-stat"><div class="rdb-sv">10 min</div><div class="rdb-sl">Avg Duration</div></div>
+        </div>
+        <div class="rdb-section">
+          <h4>Incident Summary</h4>
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead><tr style="background:var(--gray-100)">
+              <th style="padding:8px;text-align:left;font-size:11px">Date</th>
+              <th style="padding:8px;text-align:left;font-size:11px">Type</th>
+              <th style="padding:8px;text-align:left;font-size:11px">Severity</th>
+              <th style="padding:8px;text-align:left;font-size:11px">Trigger</th>
+              <th style="padding:8px;text-align:left;font-size:11px">Outcome</th>
+            </tr></thead>
+            <tbody>
+              <tr style="border-bottom:1px solid var(--gray-200)">
+                <td style="padding:8px;font-size:13px">— — —</td>
+                <td style="padding:8px"><span class="type-badge tb">Behavioural</span></td>
+                <td style="padding:8px">${sevDot('Medium')}Medium</td>
+                <td style="padding:8px;font-size:13px">Sensory</td>
+                <td style="padding:8px;font-size:13px">De-escalated</td>
+              </tr>
+              <tr>
+                <td style="padding:8px;font-size:13px">— — —</td>
+                <td style="padding:8px"><span class="type-badge tb">Behavioural</span></td>
+                <td style="padding:8px">${sevDot('Low')}Low</td>
+                <td style="padding:8px;font-size:13px">Unknown</td>
+                <td style="padding:8px;font-size:13px">Resolved</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="rdb-section">
+          <h4>Pattern Analysis</h4>
+          <p>This is an illustrative preview. Once incidents are logged, EDI AI will analyse frequency, peak times, primary triggers and the most effective interventions for the selected child or class.</p>
+        </div>
+        <div class="rdb-section">
+          <h4>Recommendations</h4>
+          <div class="rec-item"><span class="rec-icon">&#10003;</span><span>Recommendations will be generated automatically from logged incident patterns.</span></div>
+        </div>
+        <div class="report-footer">
+          <span>Generated by EDI AI &middot; ${SCHOOL.name}</span>
+          <span>CONFIDENTIAL</span>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function toggleReportChild(){
+  const t=document.getElementById('r-type').value;
+  const w=document.getElementById('r-child-wrap');
+  if(w) w.style.display=t==='Individual Child'?'flex':'none';
+}
+
+// ─── SETTINGS ────────────────────────────────────────────────────────────────
+function renderSettings(){
+  const staffRows=STAFF.map(s=>`<div class="set-row">
+    <div><div class="set-name">${s.name}</div><div class="set-role">${s.role||'Staff'}</div></div>
+    <button class="btn-outline" style="font-size:12px;padding:6px 12px">Edit</button>
+  </div>`).join('')||'<div style="color:var(--gray-500);font-size:13px">No staff configured</div>';
+
+  const roomTags=CONFIG.rooms.map(r=>`<span class="tag">&#127979; ${r}</span>`).join('');
+  const typeTags=CONFIG.incident_types.map(t=>`<span class="tag">${t}</span>`).join('');
+
+  return `
+  <div style="max-width:720px">
+    <div class="settings-section">
+      <h3>&#127979; School Information</h3>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>School Name</label>
+        <input type="text" value="${SCHOOL.name}">
+      </div>
+      <div class="form-group">
+        <label>School Roll Number</label>
+        <input type="text" value="${SCHOOL.roll_number}">
+      </div>
+    </div>
+    <div class="settings-section">
+      <h3>&#127979; Classes</h3>
+      <div style="margin-bottom:12px">${roomTags}</div>
+      <button class="btn-outline">&#43; Add Class</button>
+    </div>
+    <div class="settings-section">
+      <h3>&#128104; Staff Members</h3>
+      ${staffRows}
+      <div style="margin-top:12px"><button class="btn-outline">&#43; Add Staff Member</button></div>
+    </div>
+    <div class="settings-section">
+      <h3>&#128221; Incident Types</h3>
+      <div style="margin-bottom:12px">${typeTags}</div>
+      <button class="btn-outline">&#43; Add Type</button>
+    </div>
+    <div class="settings-section">
+      <h3>&#128274; GDPR &amp; Data Privacy</h3>
+      <div class="gdpr">
+        <div style="font-size:20px">&#128274;</div>
+        <div><strong>Data stored locally only.</strong> All incident data is stored on your school's own system. No personal data is transmitted to external servers. This tool is fully compliant with GDPR and the Irish Data Protection Act 2018. All records are accessible only to authorised staff.</div>
+      </div>
+    </div>
+    <div style="text-align:right"><button class="btn-primary" style="width:auto;padding:12px 32px" onclick="showToast('Settings saved successfully')">&#10003; Save Settings</button></div>
+  </div>`;
+}
+
+// ─── MODALS ───────────────────────────────────────────────────────────────────
+function showIncidentModal(id){
+  const i=INCIDENTS.find(x=>x.id===id);
+  if(!i) return;
+  const c=child(i.childId);
+  const sev=i.severity==='High'?'<span style="color:var(--crisis);font-weight:700">&#128308; High</span>':
+            i.severity==='Medium'?'<span style="color:#E65100;font-weight:700">&#128993; Medium</span>':
+            '<span style="color:#2E7D32;font-weight:700">&#128994; Low</span>';
+  const overlay=document.getElementById('overlay');
+  overlay.style.display='flex';
+  overlay.className='overlay';
+  overlay.innerHTML=`<div class="modal">
+    <div class="modal-hdr">
+      <div>
+        <div class="modal-title">${i.type} — ${c?c.name:'Unknown'}</div>
+        <div style="margin-top:4px"><span class="type-badge ${typeCls(i.type)}">${i.type}</span></div>
+      </div>
+      <button class="modal-close" onclick="closeOverlay()">&#10005;</button>
+    </div>
+    <div class="modal-row"><div class="modal-lbl">Date &amp; Time</div><div class="modal-val">${fmtDate(i.date)} at ${i.time}</div></div>
+    <div class="modal-row"><div class="modal-lbl">Class</div><div class="modal-val">${c?c.room:'—'}</div></div>
+    <div class="modal-row"><div class="modal-lbl">Severity</div><div class="modal-val">${sev}</div></div>
+    <div class="modal-row"><div class="modal-lbl">Trigger</div><div class="modal-val">${i.trigger}</div></div>
+    <div class="modal-row"><div class="modal-lbl">Duration</div><div class="modal-val">${i.duration?i.duration+' minutes':'Not recorded'}</div></div>
+    <hr class="modal-divider">
+    <div class="modal-row"><div class="modal-lbl">Description</div><div class="modal-val" style="line-height:1.6">${i.description}</div></div>
+    <hr class="modal-divider">
+    <div class="modal-row"><div class="modal-lbl">Interventions</div><div class="modal-val">${i.interventions.join(', ')||'None recorded'}</div></div>
+    <div class="modal-row"><div class="modal-lbl">Outcome</div><div class="modal-val">${i.outcome}</div></div>
+    <div class="modal-row"><div class="modal-lbl">Staff Member</div><div class="modal-val">${i.staff}</div></div>
+    <div class="modal-row"><div class="modal-lbl">Status</div><div class="modal-val"><span class="badge ${i.status==='Active'?'badge-active':'badge-resolved'}">${i.status}</span></div></div>
+    ${i.notes?`<hr class="modal-divider"><div class="modal-row"><div class="modal-lbl">Notes</div><div class="modal-val">${i.notes}</div></div>`:''}
+    <div style="margin-top:18px;display:flex;gap:10px">
+      <button class="btn-outline" onclick="closeOverlay()">Close</button>
+      <button class="btn-accent" onclick="closeOverlay();showChildDetail(${i.childId})">View Child Profile</button>
+    </div>
+  </div>`;
+  overlay.onclick=function(e){if(e.target===overlay) closeOverlay();};
+}
+
+function showReportModal(name){
+  const overlay=document.getElementById('overlay');
+  overlay.style.display='flex';
+  overlay.className='overlay';
+  const safeName=name.replace(/\. /g,'').replace(/ /g,'');
+  overlay.innerHTML=`<div class="modal" style="text-align:center;padding:36px">
+    <div style="font-size:48px;margin-bottom:16px">&#128196;</div>
+    <div style="font-size:18px;font-weight:700;margin-bottom:8px">Report Generated</div>
+    <div style="font-size:14px;color:var(--gray-700);margin-bottom:20px">EDI_AI_Report_${safeName}.pdf</div>
+    <div style="background:var(--gray-100);border-radius:8px;padding:12px;font-size:13px;color:var(--gray-700);margin-bottom:22px">The PDF report has been generated and is ready for download.</div>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button class="btn-outline" onclick="closeOverlay()">Close</button>
+      <button class="btn-primary" style="width:auto;padding:11px 24px" onclick="showToast('Downloading report…');closeOverlay()">&#8681; Download PDF</button>
+    </div>
+  </div>`;
+  overlay.onclick=function(e){if(e.target===overlay) closeOverlay();};
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+showTab('dashboard');
+{% endraw %}
+</script>
+</body>
+</html>
