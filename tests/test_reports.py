@@ -89,16 +89,19 @@ def test_render_child_report_pdf_returns_pdf_bytes():
     from reports import render_child_report_pdf
 
     report = {
-        "school": "Test School", "child_name": "Cian M.", "room_name": "Room 1",
-        "key_worker": "Staff Member 1", "period_label": "Last 30 days",
-        "period_range": "13 May 2026 – 11 Jun 2026", "generated_on": "11 Jun 2026",
-        "total_incidents": 1, "per_week_avg": 0.2, "top_severity": "Medium",
-        "avg_duration": "10 min",
+        "school": "Test School", "school_roll": "12345B", "child_name": "Cian M.",
+        "room_name": "Room 1", "key_worker": "Staff Member 1", "age": 8,
+        "period_label": "Last 30 days", "period_range": "13 May 2026 – 11 Jun 2026",
+        "generated_on": "11 Jun 2026", "total_incidents": 3, "per_week_avg": 0.7,
+        "top_severity": "Medium", "avg_duration": "15 min",
         "incident_rows": [{"date": "10 Jun 2026", "type": "Behavioural",
                            "severity": "Medium", "trigger": "Sensory", "outcome": "Resolved"}],
         "top_trigger": "Sensory", "top_type": "Behavioural",
         "peak_time": "Morning (before 12:00)",
         "pattern_text": "Most incidents were Behavioural type.",
+        "trigger_counts": [("Sensory", 2), ("Transition", 1)],
+        "behavior_counts": [("Behavioural", 2), ("Crisis", 1)],
+        "action_counts": [("Calm Space", 2), ("Sensory Tool", 1)],
     }
     out = render_child_report_pdf(report)
     assert isinstance(out, (bytes, bytearray))
@@ -109,13 +112,14 @@ def test_render_child_report_pdf_empty_state():
     from reports import render_child_report_pdf
 
     report = {
-        "school": "Test School", "child_name": "Empty Kid", "room_name": "—",
-        "key_worker": "—", "period_label": "Last 7 days",
-        "period_range": "05 Jun 2026 – 11 Jun 2026", "generated_on": "11 Jun 2026",
-        "total_incidents": 0, "per_week_avg": 0.0, "top_severity": "—",
-        "avg_duration": "N/A", "incident_rows": [], "top_trigger": "—",
-        "top_type": "—", "peak_time": "—",
+        "school": "Test School", "school_roll": "", "child_name": "Empty Kid",
+        "room_name": "—", "key_worker": "—", "age": "—",
+        "period_label": "Last 7 days", "period_range": "05 Jun 2026 – 11 Jun 2026",
+        "generated_on": "11 Jun 2026", "total_incidents": 0, "per_week_avg": 0.0,
+        "top_severity": "—", "avg_duration": "N/A", "incident_rows": [],
+        "top_trigger": "—", "top_type": "—", "peak_time": "—",
         "pattern_text": "No incidents recorded in this period.",
+        "trigger_counts": [], "behavior_counts": [], "action_counts": [],
     }
     out = render_child_report_pdf(report)
     assert out[:4] == b"%PDF"
