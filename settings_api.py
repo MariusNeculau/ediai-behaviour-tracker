@@ -9,8 +9,8 @@ refused with HTTP 409 and an actionable message.
 from flask import Blueprint, jsonify, request
 
 import config
-from models import db, Child, Staff, Room
-from serializers import serialize_room, serialize_staff, serialize_child
+from models import db, Child, Staff, Room, SystemConfig
+from serializers import serialize_room, serialize_staff, serialize_child, serialize_system_config
 
 settings_bp = Blueprint("settings", __name__, url_prefix="/api")
 
@@ -192,3 +192,26 @@ def delete_child(child_id):
     child.active = False
     db.session.commit()
     return jsonify(serialize_child(child))
+
+
+# ─── System ─────────────────────────────────────────────────────────────────
+
+@settings_bp.route("/system", methods=["GET"])
+def get_system():
+    return jsonify(serialize_system_config(SystemConfig.query.first()))
+
+
+@settings_bp.route("/system", methods=["PUT"])
+def update_system():
+    sc = SystemConfig.query.first()
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Name is required"}), 400
+    roll_number = (data.get("roll_number") or "").strip()
+    if not roll_number:
+        return jsonify({"error": "Roll number is required"}), 400
+    sc.school_name = name
+    sc.roll_number = roll_number
+    db.session.commit()
+    return jsonify(serialize_system_config(sc))

@@ -195,3 +195,31 @@ def test_system_config_seeded_from_config(app):
         out = serialize_system_config(sc)
         assert out["name"] == config.SCHOOL["name"]
         assert out["roll_number"] == config.SCHOOL["roll_number"]
+
+
+def test_get_system_config_defaults(client):
+    import config
+
+    body = client.get("/api/system").get_json()
+    assert body["name"] == config.SCHOOL["name"]
+    assert body["roll_number"] == config.SCHOOL["roll_number"]
+
+
+def test_update_system_config(client):
+    res = client.put("/api/system", json={"name": "Oak Primary", "roll_number": "12345B"})
+    assert res.status_code == 200
+    assert res.get_json() == {"name": "Oak Primary", "roll_number": "12345B"}
+
+    body = client.get("/api/system").get_json()
+    assert body["name"] == "Oak Primary"
+    assert body["roll_number"] == "12345B"
+
+
+def test_update_system_blank_name_returns_400(client):
+    res = client.put("/api/system", json={"name": "   ", "roll_number": "12345B"})
+    assert res.status_code == 400
+
+
+def test_update_system_blank_roll_returns_400(client):
+    res = client.put("/api/system", json={"name": "Oak Primary", "roll_number": ""})
+    assert res.status_code == 400
