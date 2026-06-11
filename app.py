@@ -14,9 +14,9 @@ Pasul de împachetare (.exe cu PyInstaller) urmează mai târziu în roadmap.
 """
 
 import os
-from datetime import date
+from datetime import date, datetime
 
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, request
 
 import config
 from models import db, Child, Staff, Incident, Intervention
@@ -140,23 +140,62 @@ def register_routes(app):
     @app.route("/api/incidents")
     def api_incidents():
         items = Incident.query.order_by(Incident.occurred_at.desc()).all()
-        return jsonify(
-            [
-                {
-                    "id": i.id,
-                    "child_id": i.child_id,
-                    "type": i.type,
-                    "severity": i.severity,
-                    "trigger": i.trigger,
-                    "duration": i.duration,
-                    "outcome": i.outcome,
-                    "status": i.status,
-                    "interventions": [x.name for x in i.interventions],
-                    "occurred_at": i.occurred_at.isoformat() if i.occurred_at else None,
-                }
-                for i in items
-            ]
+        return jsonify([_serialize_incident(i) for i in items])
+
+    @app.route("/api/incidents", methods=["POST"])
+    def create_incident():
+        data = request.get_json(silent=True) or {}
+
+        required = ["childId", "date", "time", "type", "severity", "description"]
+        missing = [f for f in required if not data.get(f)]
+        if missing:
+            return jsonify({"error": "Missing required fields: " + ", ".join(missing)}), 400
+
+        child = db.session.get(Child, data["childId"])
+        if child is None:
+            return jsonify({"error": "Unknown childId"}), 400
+
+        if data["type"] not in config.INCIDENT_TYPES:
+            return jsonify({"error": "Invalid incident type"}), 400
+        if data["severity"] not in config.SEVERITY_LEVELS:
+            return jsonify({"error": "Invalid severity"}), 400
+
+        try:
+            occurred_at = datetime.strptime(
+                f"{data['date']} {data['time']}", "%Y-%m-%d %H:%M"
+            )
+        except (ValueError, TypeError):
+            return jsonify({"error": "Invalid date/time"}), 400
+
+        staff = (
+            Staff.query.filter_by(name=data.get("staff")).first()
+            if data.get("staff")
+            else None
         )
+        names = data.get("interventions") or []
+        interventions = (
+            Intervention.query.filter(Intervention.name.in_(names)).all()
+            if names
+            else []
+        )
+
+        incident = Incident(
+            child_id=child.id,
+            staff_id=staff.id if staff else None,
+            occurred_at=occurred_at,
+            type=data["type"],
+            severity=data["severity"],
+            trigger=data.get("trigger"),
+            description=data.get("description"),
+            duration=data.get("duration"),
+            outcome=data.get("outcome"),
+            status="Resolved",
+            notes=data.get("notes"),
+        )
+        incident.interventions = interventions
+        db.session.add(incident)
+        db.session.commit()
+        return jsonify(_serialize_incident(incident)), 201
 
 
 app = create_app()
