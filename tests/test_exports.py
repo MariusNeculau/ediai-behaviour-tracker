@@ -46,3 +46,29 @@ def test_incidents_to_csv_handles_missing():
     out = incidents_to_csv([inc])
     lines = out.strip().split("\n")
     assert lines[1].count(",") == 13   # 14 columns -> 13 separators, no embedded commas
+
+
+def test_export_incidents_csv_download(client):
+    res = client.get("/api/export/incidents.csv")
+    assert res.status_code == 200
+    assert res.mimetype == "text/csv"
+    assert ".csv" in res.headers["Content-Disposition"]
+    text = res.get_data(as_text=True)
+    assert text[0] == "﻿"               # UTF-8 BOM for Excel
+    assert "Date,Time,Child" in text
+
+
+def test_export_incidents_csv_includes_row(app, client, child_id):
+    from datetime import datetime
+    from models import db, Incident
+
+    with app.app_context():
+        db.session.add(Incident(
+            child_id=child_id, occurred_at=datetime(2026, 6, 10, 9, 30),
+            type="Crisis", severity="High",
+        ))
+        db.session.commit()
+
+    text = client.get("/api/export/incidents.csv").get_data(as_text=True)
+    assert "2026-06-10" in text
+    assert "Crisis" in text

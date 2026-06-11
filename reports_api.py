@@ -15,6 +15,7 @@ from reports import (
     period_start, build_child_report, build_class_report, build_school_report,
     render_report_pdf,
 )
+from exports import incidents_to_csv
 
 reports_bp = Blueprint("reports", __name__, url_prefix="/api")
 
@@ -132,5 +133,18 @@ def school_report():
     return Response(
         pdf,
         mimetype="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@reports_bp.route("/export/incidents.csv", methods=["GET"])
+def export_incidents_csv():
+    incidents = Incident.query.order_by(Incident.occurred_at.desc()).all()
+    body = "﻿" + incidents_to_csv(incidents)   # BOM so Excel detects UTF-8
+    today = date.today()
+    filename = f"EDI_AI_Incidents_{today:%Y%m%d}.csv"
+    return Response(
+        body,
+        mimetype="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
