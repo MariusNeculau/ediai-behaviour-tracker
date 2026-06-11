@@ -14,6 +14,7 @@ Pasul de împachetare (.exe cu PyInstaller) urmează mai târziu în roadmap.
 """
 
 import os
+import sys
 from datetime import date, datetime
 
 from flask import Flask, jsonify, render_template, request
@@ -57,8 +58,15 @@ def _config_payload():
     }
 
 
+def _resource_base():
+    """Rădăcina resurselor read-only: sys._MEIPASS când e frozen, altfel dir-ul acestui fișier."""
+    if getattr(sys, "frozen", False):
+        return sys._MEIPASS
+    return os.path.dirname(os.path.abspath(__file__))
+
+
 def create_app():
-    app = Flask(__name__)
+    app = Flask(__name__, template_folder=os.path.join(_resource_base(), "templates"))
     app.config.from_object(config)
 
     # Asigură existența folderului instance/ pentru fișierul SQLite
