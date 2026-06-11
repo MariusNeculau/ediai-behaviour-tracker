@@ -71,6 +71,8 @@ def create_app():
         seed_lookups()
 
     register_routes(app)
+    from settings_api import settings_bp
+    app.register_blueprint(settings_bp)
     return app
 
 

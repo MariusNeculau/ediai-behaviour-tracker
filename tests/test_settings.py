@@ -35,3 +35,47 @@ def test_serialize_child_includes_ids(app):
         assert out["keyWorkerId"] == kw.id
         assert out["room"] == "Room 1"
         assert out["active"] is True
+
+
+def test_create_and_list_room(client):
+    res = client.post("/api/rooms", json={"name": "Room X"})
+    assert res.status_code == 201
+    assert res.get_json()["name"] == "Room X"
+    names = [r["name"] for r in client.get("/api/rooms").get_json()]
+    assert "Room X" in names
+
+
+def test_create_room_duplicate_returns_400(client):
+    client.post("/api/rooms", json={"name": "Dup"})
+    res = client.post("/api/rooms", json={"name": "Dup"})
+    assert res.status_code == 400
+
+
+def test_create_room_blank_returns_400(client):
+    res = client.post("/api/rooms", json={"name": "   "})
+    assert res.status_code == 400
+
+
+def test_rename_room(client):
+    rid = client.post("/api/rooms", json={"name": "Old"}).get_json()["id"]
+    res = client.put(f"/api/rooms/{rid}", json={"name": "New"})
+    assert res.status_code == 200
+    assert res.get_json()["name"] == "New"
+
+
+def test_archive_empty_room(client):
+    rid = client.post("/api/rooms", json={"name": "Empty"}).get_json()["id"]
+    res = client.delete(f"/api/rooms/{rid}")
+    assert res.status_code == 200
+    names = [r["name"] for r in client.get("/api/rooms").get_json()]
+    assert "Empty" not in names
+
+
+def test_archive_room_in_use_returns_409(app, client, room_id):
+    from models import db, Child
+
+    with app.app_context():
+        db.session.add(Child(name="Kid", room_id=room_id, support="High"))
+        db.session.commit()
+    res = client.delete(f"/api/rooms/{room_id}")
+    assert res.status_code == 409
