@@ -68,10 +68,10 @@ def test_post_valid_incident_persists(app, client, child_id):
     assert "Calm Space" in body["interventions"]
     assert "Unknown X" not in body["interventions"]  # unknown ignored
 
-    from models import Incident
+    from models import db, Incident
 
     with app.app_context():
-        inc = Incident.query.get(body["id"])
+        inc = db.session.get(Incident, body["id"])
         assert inc is not None
         assert inc.notes == "Some notes"
         assert inc.staff.name == "Staff Member 1"
@@ -102,5 +102,12 @@ def test_post_invalid_type_returns_400(client, child_id):
 def test_post_invalid_severity_returns_400(client, child_id):
     payload = _valid_payload(child_id)
     payload["severity"] = "Critical"
+    res = client.post("/api/incidents", json=payload)
+    assert res.status_code == 400
+
+
+def test_post_invalid_datetime_returns_400(client, child_id):
+    payload = _valid_payload(child_id)
+    payload["date"] = "not-a-date"
     res = client.post("/api/incidents", json=payload)
     assert res.status_code == 400

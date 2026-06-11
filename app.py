@@ -137,7 +137,7 @@ def register_routes(app):
         payload.update(_config_payload())
         return jsonify(payload)
 
-    @app.route("/api/incidents")
+    @app.route("/api/incidents", methods=["GET"])
     def api_incidents():
         items = Incident.query.order_by(Incident.occurred_at.desc()).all()
         return jsonify([_serialize_incident(i) for i in items])
@@ -146,6 +146,8 @@ def register_routes(app):
     def create_incident():
         data = request.get_json(silent=True) or {}
 
+        # description is required by business rule even though the model column
+        # is nullable (other code paths, e.g. tests, may create rows without it).
         required = ["childId", "date", "time", "type", "severity", "description"]
         missing = [f for f in required if not data.get(f)]
         if missing:
@@ -194,7 +196,11 @@ def register_routes(app):
         )
         incident.interventions = interventions
         db.session.add(incident)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            return jsonify({"error": "Could not save incident"}), 500
         return jsonify(_serialize_incident(incident)), 201
 
 
