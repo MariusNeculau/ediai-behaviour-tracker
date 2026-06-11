@@ -165,3 +165,133 @@ def test_child_report_with_incident_still_pdf(app, client, child_id):
     res = client.get(f"/api/reports/child/{child_id}?period=term")
     assert res.status_code == 200
     assert res.data[:4] == b"%PDF"
+
+
+def test_aggregate_shared():
+    from reports import _aggregate
+
+    incs = [
+        SimpleNamespace(severity="High", duration=10, trigger="Sensory", type="Behavioural",
+                        interventions=[], occurred_at=datetime(2026, 6, 10, 9, 0)),
+        SimpleNamespace(severity="Medium", duration=None, trigger="Sensory", type="Crisis",
+                        interventions=[], occurred_at=datetime(2026, 6, 9, 14, 0)),
+    ]
+    a = _aggregate(incs, 30)
+    assert a["total_incidents"] == 2
+    assert a["per_week_avg"] == 0.5
+    assert a["top_trigger"] == "Sensory"
+    assert a["avg_duration"] == "10 min"
+    assert a["pattern_text"].startswith("Most incidents were")
+
+
+def _mk_inc(child_id, trigger, hour=9, typ="Behavioural", sev="Medium", dur=10):
+    return SimpleNamespace(
+        child_id=child_id, occurred_at=datetime(2026, 6, 10, hour, 0),
+        type=typ, severity=sev, trigger=trigger, outcome="Resolved", duration=dur,
+        interventions=[SimpleNamespace(name="Calm Space")],
+    )
+
+
+def test_build_class_report():
+    from reports import build_class_report
+
+    room = SimpleNamespace(id=1, name="Room 1")
+    kids = [SimpleNamespace(id=10, name="Alice", room_id=1),
+            SimpleNamespace(id=11, name="Bob", room_id=1)]
+    incidents = [_mk_inc(10, "Sensory"), _mk_inc(10, "Sensory"), _mk_inc(11, "Noise")]
+    r = build_class_report(room, kids, incidents, "month", date(2026, 6, 11))
+
+    assert r["report_type"] == "class"
+    assert r["subtitle"] == "Class Summary · Room 1"
+    assert ["Students", "2"] in r["details_rows"]
+    assert r["total_incidents"] == 3
+    assert r["breakdown_header"] == ["Student", "Incidents", "Top Trigger"]
+    assert r["breakdown_rows"][0] == ["Alice", "2", "Sensory"]
+    assert r["breakdown_rows"][1] == ["Bob", "1", "Noise"]
+
+
+def test_build_class_report_empty():
+    from reports import build_class_report
+
+    room = SimpleNamespace(id=1, name="Room 1")
+    kids = [SimpleNamespace(id=10, name="Alice", room_id=1)]
+    r = build_class_report(room, kids, [], "week", date(2026, 6, 11))
+
+    assert r["total_incidents"] == 0
+    assert r["breakdown_rows"] == [["Alice", "0", "—"]]
+    assert r["pattern_text"] == "No incidents recorded in this period."
+
+
+def test_build_school_report():
+    from reports import build_school_report
+
+    rooms = [SimpleNamespace(id=1, name="Room 1"), SimpleNamespace(id=2, name="Room 2")]
+    kids = [SimpleNamespace(id=10, name="Alice", room_id=1),
+            SimpleNamespace(id=11, name="Bob", room_id=2),
+            SimpleNamespace(id=12, name="Cara", room_id=2)]
+    incidents = [_mk_inc(11, "Noise"), _mk_inc(12, "Noise"), _mk_inc(10, "Sensory")]
+    r = build_school_report(rooms, kids, incidents, "term", date(2026, 6, 11))
+
+    assert r["report_type"] == "school"
+    assert ["Classes", "2"] in r["details_rows"]
+    assert ["Students", "3"] in r["details_rows"]
+    assert r["total_incidents"] == 3
+    assert r["breakdown_header"] == ["Class", "Students", "Incidents", "Top Trigger"]
+    assert r["breakdown_rows"][0] == ["Room 2", "2", "2", "Noise"]
+    assert r["breakdown_rows"][1] == ["Room 1", "1", "1", "Sensory"]
+
+
+def test_render_class_report_pdf():
+    from reports import build_class_report, render_report_pdf
+
+    room = SimpleNamespace(id=1, name="Room 1")
+    kids = [SimpleNamespace(id=10, name="Alice", room_id=1)]
+    incs = [_mk_inc(10, "Sensory")]
+    rep = build_class_report(room, kids, incs, "month", date(2026, 6, 11))
+    rep["school"] = "Test School"
+    rep["school_roll"] = "12345B"
+    out = render_report_pdf(rep)
+    assert out[:4] == b"%PDF"
+
+
+def test_render_school_report_pdf():
+    from reports import build_school_report, render_report_pdf
+
+    rooms = [SimpleNamespace(id=1, name="Room 1"), SimpleNamespace(id=2, name="Room 2")]
+    kids = [SimpleNamespace(id=10, name="Alice", room_id=1)]
+    rep = build_school_report(rooms, kids, [], "week", date(2026, 6, 11))
+    rep["school"] = "Test School"
+    rep["school_roll"] = ""
+    out = render_report_pdf(rep)
+    assert out[:4] == b"%PDF"
+
+
+def test_class_report_pdf_download(client, room_id):
+    res = client.get(f"/api/reports/class/{room_id}?period=month")
+    assert res.status_code == 200
+    assert res.mimetype == "application/pdf"
+    assert res.data[:4] == b"%PDF"
+    cd = res.headers["Content-Disposition"]
+    assert "Class" in cd and ".pdf" in cd
+
+
+def test_class_report_unknown_room_returns_404(client):
+    res = client.get("/api/reports/class/99999?period=month")
+    assert res.status_code == 404
+
+
+def test_class_report_invalid_period_returns_400(client, room_id):
+    res = client.get(f"/api/reports/class/{room_id}?period=decade")
+    assert res.status_code == 400
+
+
+def test_school_report_pdf_download(client):
+    res = client.get("/api/reports/school?period=term")
+    assert res.status_code == 200
+    assert res.data[:4] == b"%PDF"
+    assert "Whole_School" in res.headers["Content-Disposition"]
+
+
+def test_school_report_invalid_period_returns_400(client):
+    res = client.get("/api/reports/school?period=nope")
+    assert res.status_code == 400
