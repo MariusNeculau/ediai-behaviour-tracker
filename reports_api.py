@@ -41,7 +41,9 @@ def child_report(child_id):
     )
 
     report = build_child_report(child, incidents, period, today)
-    report["school"] = serialize_system_config(SystemConfig.query.first())["name"]
+    sc = serialize_system_config(SystemConfig.query.first())
+    report["school"] = sc["name"]
+    report["school_roll"] = sc["roll_number"]
     pdf = render_child_report_pdf(report)
 
     safe_name = re.sub(r"[^A-Za-z0-9]+", "_", child.name).strip("_") or "child"
