@@ -27,11 +27,28 @@ def client(app):
 
 @pytest.fixture
 def child_id(app):
-    """Create one child and return its id."""
-    from models import db, Child
+    """Create one child (in a seeded room) and return its id."""
+    from models import db, Child, Room
 
     with app.app_context():
-        c = Child(name="Test Child", room="Room 1", age=8, support="High")
+        room = Room.query.filter_by(name="Room 1").first()
+        c = Child(name="Test Child", room_id=room.id, age=8, support="High")
         db.session.add(c)
         db.session.commit()
         return c.id
+
+
+@pytest.fixture
+def room_id(app):
+    from models import Room
+
+    with app.app_context():
+        return Room.query.filter_by(name="Room 1").first().id
+
+
+@pytest.fixture
+def staff_id(app):
+    from models import Staff
+
+    with app.app_context():
+        return Staff.query.filter_by(name="Staff Member 1").first().id
