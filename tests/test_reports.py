@@ -264,3 +264,34 @@ def test_render_school_report_pdf():
     rep["school_roll"] = ""
     out = render_report_pdf(rep)
     assert out[:4] == b"%PDF"
+
+
+def test_class_report_pdf_download(client, room_id):
+    res = client.get(f"/api/reports/class/{room_id}?period=month")
+    assert res.status_code == 200
+    assert res.mimetype == "application/pdf"
+    assert res.data[:4] == b"%PDF"
+    cd = res.headers["Content-Disposition"]
+    assert "Class" in cd and ".pdf" in cd
+
+
+def test_class_report_unknown_room_returns_404(client):
+    res = client.get("/api/reports/class/99999?period=month")
+    assert res.status_code == 404
+
+
+def test_class_report_invalid_period_returns_400(client, room_id):
+    res = client.get(f"/api/reports/class/{room_id}?period=decade")
+    assert res.status_code == 400
+
+
+def test_school_report_pdf_download(client):
+    res = client.get("/api/reports/school?period=term")
+    assert res.status_code == 200
+    assert res.data[:4] == b"%PDF"
+    assert "Whole_School" in res.headers["Content-Disposition"]
+
+
+def test_school_report_invalid_period_returns_400(client):
+    res = client.get("/api/reports/school?period=nope")
+    assert res.status_code == 400
