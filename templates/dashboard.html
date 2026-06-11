@@ -808,6 +808,10 @@ function renderReports(){
     </div>
   </div>
 
+  <div style="margin:0 0 22px">
+    <button class="btn-outline" onclick="exportIncidentsCsv()">&#11015; Export All Incidents (CSV)</button>
+  </div>
+
   <div class="recent-reports">
     <div class="card-header" style="padding:14px 18px"><div class="card-title">Recent Reports</div></div>
     <div class="table-wrap">
@@ -905,6 +909,9 @@ function generateReport(){
   }else{
     window.location='/api/reports/school?period='+period;
   }
+}
+function exportIncidentsCsv(){
+  window.location='/api/export/incidents.csv';
 }
 
 // ─── SETTINGS ────────────────────────────────────────────────────────────────
