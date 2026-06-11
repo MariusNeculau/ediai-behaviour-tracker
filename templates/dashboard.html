@@ -282,6 +282,7 @@ const SCHOOL    = {{ school | tojson }};
 const CONFIG    = {{ config_data | tojson }};
 const CHILDREN  = {{ children | tojson }};
 const STAFF     = {{ staff | tojson }};
+const ROOMS     = {{ rooms | tojson }};
 let   INCIDENTS = {{ incidents | tojson }};
 const TODAY     = {{ today | tojson }};   // ISO yyyy-mm-dd din server
 </script>
@@ -454,7 +455,7 @@ function renderDashboard(){
     <div class="stat-card">
       <div class="stat-label">Children Monitored</div>
       <div class="stat-value">${CHILDREN.length}</div>
-      <div class="stat-sub">Across ${CONFIG.rooms.length} classrooms</div>
+      <div class="stat-sub">Across ${ROOMS.length} classrooms</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Staff On Duty</div>
@@ -633,7 +634,7 @@ async function saveIncident(){
 
 // ─── PROFILES ────────────────────────────────────────────────────────────────
 function renderProfiles(){
-  const rooms=['All Rooms', ...CONFIG.rooms];
+  const rooms=['All Rooms', ...ROOMS.map(r=>r.name)];
   const roomOpts=rooms.map(r=>`<option${profileFilter===r?' selected':''}>${r}</option>`).join('');
 
   let filtered=CHILDREN;
@@ -885,41 +886,53 @@ function toggleReportChild(){
 
 // ─── SETTINGS ────────────────────────────────────────────────────────────────
 function renderSettings(){
+  const studentRows=CHILDREN.map(c=>`<div class="set-row">
+    <div><div class="set-name">${c.name}</div><div class="set-role">${c.room} &middot; ${c.keyWorker||'No key worker'}${c.age?(' &middot; Age '+c.age):''}</div></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-outline" style="font-size:12px;padding:6px 12px" onclick="openChildModal(${c.id})">Edit</button>
+      <button class="btn-outline" style="font-size:12px;padding:6px 12px" onclick="archiveChild(${c.id})">Archive</button>
+    </div>
+  </div>`).join('')||'<div style="color:var(--gray-500);font-size:13px">No students yet</div>';
+
+  const roomRows=ROOMS.map(r=>`<div class="set-row">
+    <div><div class="set-name">&#127979; ${r.name}</div></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-outline" style="font-size:12px;padding:6px 12px" onclick="openRoomModal(${r.id})">Edit</button>
+      <button class="btn-outline" style="font-size:12px;padding:6px 12px" onclick="archiveRoom(${r.id})">Archive</button>
+    </div>
+  </div>`).join('')||'<div style="color:var(--gray-500);font-size:13px">No classes yet</div>';
+
   const staffRows=STAFF.map(s=>`<div class="set-row">
     <div><div class="set-name">${s.name}</div><div class="set-role">${s.role||'Staff'}</div></div>
-    <button class="btn-outline" style="font-size:12px;padding:6px 12px">Edit</button>
+    <div style="display:flex;gap:8px">
+      <button class="btn-outline" style="font-size:12px;padding:6px 12px" onclick="openStaffModal(${s.id})">Edit</button>
+      <button class="btn-outline" style="font-size:12px;padding:6px 12px" onclick="archiveStaff(${s.id})">Archive</button>
+    </div>
   </div>`).join('')||'<div style="color:var(--gray-500);font-size:13px">No staff configured</div>';
 
-  const roomTags=CONFIG.rooms.map(r=>`<span class="tag">&#127979; ${r}</span>`).join('');
   const typeTags=CONFIG.incident_types.map(t=>`<span class="tag">${t}</span>`).join('');
 
   return `
   <div style="max-width:720px">
     <div class="settings-section">
-      <h3>&#127979; School Information</h3>
-      <div class="form-group" style="margin-bottom:14px">
-        <label>School Name</label>
-        <input type="text" value="${SCHOOL.name}">
-      </div>
-      <div class="form-group">
-        <label>School Roll Number</label>
-        <input type="text" value="${SCHOOL.roll_number}">
-      </div>
+      <h3>&#128104; Students</h3>
+      ${studentRows}
+      <div style="margin-top:12px"><button class="btn-outline" onclick="openChildModal(null)">&#43; Add Student</button></div>
     </div>
     <div class="settings-section">
       <h3>&#127979; Classes</h3>
-      <div style="margin-bottom:12px">${roomTags}</div>
-      <button class="btn-outline">&#43; Add Class</button>
+      ${roomRows}
+      <div style="margin-top:12px"><button class="btn-outline" onclick="openRoomModal(null)">&#43; Add Class</button></div>
     </div>
     <div class="settings-section">
       <h3>&#128104; Staff Members</h3>
       ${staffRows}
-      <div style="margin-top:12px"><button class="btn-outline">&#43; Add Staff Member</button></div>
+      <div style="margin-top:12px"><button class="btn-outline" onclick="openStaffModal(null)">&#43; Add Staff Member</button></div>
     </div>
     <div class="settings-section">
       <h3>&#128221; Incident Types</h3>
       <div style="margin-bottom:12px">${typeTags}</div>
-      <button class="btn-outline">&#43; Add Type</button>
+      <div style="color:var(--gray-500);font-size:12px">Configured in config.py</div>
     </div>
     <div class="settings-section">
       <h3>&#128274; GDPR &amp; Data Privacy</h3>
@@ -928,8 +941,134 @@ function renderSettings(){
         <div><strong>Data stored locally only.</strong> All incident data is stored on your school's own system. No personal data is transmitted to external servers. This tool is fully compliant with GDPR and the Irish Data Protection Act 2018. All records are accessible only to authorised staff.</div>
       </div>
     </div>
-    <div style="text-align:right"><button class="btn-primary" style="width:auto;padding:12px 32px" onclick="showToast('Settings saved successfully')">&#10003; Save Settings</button></div>
   </div>`;
+}
+
+// ─── SETTINGS CRUD ──────────────────────────────────────────────────────────
+function openRoomModal(id){
+  const r=id?ROOMS.find(x=>x.id===id):null;
+  const overlay=document.getElementById('overlay');
+  overlay.style.display='flex';overlay.className='overlay';
+  overlay.innerHTML=`<div class="modal">
+    <div class="modal-hdr"><div class="modal-title">${r?'Edit Class':'Add Class'}</div>
+      <button class="modal-close" onclick="closeOverlay()">&#10005;</button></div>
+    <div class="form-group"><label>Class Name</label>
+      <input type="text" id="m-room-name" value="${r?r.name:''}"></div>
+    <div style="margin-top:18px;display:flex;gap:10px">
+      <button class="btn-outline" onclick="closeOverlay()">Cancel</button>
+      <button class="btn-primary" style="width:auto;padding:10px 24px" onclick="saveRoom(${r?r.id:'null'})">Save</button>
+    </div></div>`;
+  overlay.onclick=function(e){if(e.target===overlay) closeOverlay();};
+}
+async function saveRoom(id){
+  const name=document.getElementById('m-room-name').value.trim();
+  if(!name){alert('Please enter a class name.');return;}
+  const url=id?`/api/rooms/${id}`:'/api/rooms';const method=id?'PUT':'POST';
+  try{
+    const res=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+    if(!res.ok){const e=await res.json().catch(()=>({}));alert(e.error||('HTTP '+res.status));return;}
+    const saved=await res.json();
+    if(id){const i=ROOMS.findIndex(x=>x.id===id);if(i>=0)ROOMS[i]=saved;}else ROOMS.push(saved);
+    closeOverlay();showToast('Class saved');showTab('settings');
+  }catch(err){alert('Network error: '+err.message);}
+}
+async function archiveRoom(id){
+  if(!confirm('Archive this class? It will be hidden from active lists.'))return;
+  try{
+    const res=await fetch(`/api/rooms/${id}`,{method:'DELETE'});
+    if(!res.ok){const e=await res.json().catch(()=>({}));alert(e.error||('HTTP '+res.status));return;}
+    const i=ROOMS.findIndex(x=>x.id===id);if(i>=0)ROOMS.splice(i,1);
+    showToast('Class archived');showTab('settings');
+  }catch(err){alert('Network error: '+err.message);}
+}
+
+function openStaffModal(id){
+  const s=id?STAFF.find(x=>x.id===id):null;
+  const overlay=document.getElementById('overlay');
+  overlay.style.display='flex';overlay.className='overlay';
+  overlay.innerHTML=`<div class="modal">
+    <div class="modal-hdr"><div class="modal-title">${s?'Edit Staff Member':'Add Staff Member'}</div>
+      <button class="modal-close" onclick="closeOverlay()">&#10005;</button></div>
+    <div class="form-group"><label>Name</label><input type="text" id="m-staff-name" value="${s?s.name:''}"></div>
+    <div class="form-group"><label>Role</label><input type="text" id="m-staff-role" value="${s&&s.role?s.role:''}"></div>
+    <div style="margin-top:18px;display:flex;gap:10px">
+      <button class="btn-outline" onclick="closeOverlay()">Cancel</button>
+      <button class="btn-primary" style="width:auto;padding:10px 24px" onclick="saveStaff(${s?s.id:'null'})">Save</button>
+    </div></div>`;
+  overlay.onclick=function(e){if(e.target===overlay) closeOverlay();};
+}
+async function saveStaff(id){
+  const name=document.getElementById('m-staff-name').value.trim();
+  const role=document.getElementById('m-staff-role').value.trim();
+  if(!name){alert('Please enter a name.');return;}
+  const url=id?`/api/staff/${id}`:'/api/staff';const method=id?'PUT':'POST';
+  try{
+    const res=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify({name,role})});
+    if(!res.ok){const e=await res.json().catch(()=>({}));alert(e.error||('HTTP '+res.status));return;}
+    const saved=await res.json();
+    if(id){const i=STAFF.findIndex(x=>x.id===id);if(i>=0)STAFF[i]=saved;}else STAFF.push(saved);
+    closeOverlay();showToast('Staff member saved');showTab('settings');
+  }catch(err){alert('Network error: '+err.message);}
+}
+async function archiveStaff(id){
+  if(!confirm('Archive this staff member?'))return;
+  try{
+    const res=await fetch(`/api/staff/${id}`,{method:'DELETE'});
+    if(!res.ok){const e=await res.json().catch(()=>({}));alert(e.error||('HTTP '+res.status));return;}
+    const i=STAFF.findIndex(x=>x.id===id);if(i>=0)STAFF.splice(i,1);
+    showToast('Staff archived');showTab('settings');
+  }catch(err){alert('Network error: '+err.message);}
+}
+
+function openChildModal(id){
+  const c=id?CHILDREN.find(x=>x.id===id):null;
+  const roomOpts=ROOMS.map(r=>`<option value="${r.id}"${c&&c.roomId===r.id?' selected':''}>${r.name}</option>`).join('');
+  const staffOpts=`<option value="">&mdash; None &mdash;</option>`+STAFF.map(s=>`<option value="${s.id}"${c&&c.keyWorkerId===s.id?' selected':''}>${s.name}</option>`).join('');
+  const supOpts=CONFIG.support_levels.map(l=>`<option${c&&c.support===l?' selected':''}>${l}</option>`).join('');
+  const overlay=document.getElementById('overlay');
+  overlay.style.display='flex';overlay.className='overlay';
+  overlay.innerHTML=`<div class="modal">
+    <div class="modal-hdr"><div class="modal-title">${c?'Edit Student':'Add Student'}</div>
+      <button class="modal-close" onclick="closeOverlay()">&#10005;</button></div>
+    <div class="form-group"><label>Name</label><input type="text" id="m-child-name" value="${c?c.name:''}"></div>
+    <div class="form-group"><label>Class</label><select id="m-child-room">${roomOpts}</select></div>
+    <div class="form-group"><label>Key Worker</label><select id="m-child-kw">${staffOpts}</select></div>
+    <div class="form-group"><label>Age</label><input type="number" id="m-child-age" value="${c&&c.age?c.age:''}"></div>
+    <div class="form-group"><label>Support Level</label><select id="m-child-support">${supOpts}</select></div>
+    <div style="margin-top:18px;display:flex;gap:10px">
+      <button class="btn-outline" onclick="closeOverlay()">Cancel</button>
+      <button class="btn-primary" style="width:auto;padding:10px 24px" onclick="saveChild(${c?c.id:'null'})">Save</button>
+    </div></div>`;
+  overlay.onclick=function(e){if(e.target===overlay) closeOverlay();};
+}
+async function saveChild(id){
+  const name=document.getElementById('m-child-name').value.trim();
+  const roomId=parseInt(document.getElementById('m-child-room').value)||null;
+  const kwVal=document.getElementById('m-child-kw').value;
+  const keyWorkerId=kwVal?parseInt(kwVal):null;
+  const ageVal=document.getElementById('m-child-age').value;
+  const age=ageVal?parseInt(ageVal):null;
+  const support=document.getElementById('m-child-support').value;
+  if(!name){alert('Please enter a name.');return;}
+  if(!roomId){alert('Please select a class.');return;}
+  const payload={name,roomId,keyWorkerId,age,support};
+  const url=id?`/api/children/${id}`:'/api/children';const method=id?'PUT':'POST';
+  try{
+    const res=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(!res.ok){const e=await res.json().catch(()=>({}));alert(e.error||('HTTP '+res.status));return;}
+    const saved=await res.json();
+    if(id){const i=CHILDREN.findIndex(x=>x.id===id);if(i>=0)CHILDREN[i]=saved;}else CHILDREN.push(saved);
+    closeOverlay();showToast('Student saved');showTab('settings');
+  }catch(err){alert('Network error: '+err.message);}
+}
+async function archiveChild(id){
+  if(!confirm('Archive this student? Their incident history is preserved.'))return;
+  try{
+    const res=await fetch(`/api/children/${id}`,{method:'DELETE'});
+    if(!res.ok){const e=await res.json().catch(()=>({}));alert(e.error||('HTTP '+res.status));return;}
+    const i=CHILDREN.findIndex(x=>x.id===id);if(i>=0)CHILDREN.splice(i,1);
+    showToast('Student archived');showTab('settings');
+  }catch(err){alert('Network error: '+err.message);}
 }
 
 // ─── MODALS ───────────────────────────────────────────────────────────────────
