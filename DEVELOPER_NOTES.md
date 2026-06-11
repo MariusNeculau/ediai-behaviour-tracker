@@ -15,7 +15,7 @@ Migrarea aplicației de la un stack Web (Next.js/Firebase) la un stack Local Des
 3. [x] Definire modele de date (SQLAlchemy) în `models.py` (`Child`, `Staff`, `Incident`, `Intervention`).
 4. [x] Creare `config.py` pentru personalizarea categoriilor (școală, clase, staff, taxonomii).
 5. [x] Implementare `app.py` și servire frontend generic. `templates/dashboard.html` portat din `legacy/index.html`: identitate școală + taxonomii injectate din `config.py`, date din SQLite (goale = blank slate). Verificat cu `app.test_client()`: `GET /` → 200, fără referințe "Saplings", fără Jinja neevaluat.
-6. [ ] Împachetare cu PyInstaller pentru .exe.
+6. [x] Împachetare cu PyInstaller pentru .exe: `launcher.py` + `ediai.spec` (one-file, consolă, auto-open browser); DB lângă .exe (persistent), blank slate la build (`SEED_DEMO_DATA` off când e frozen), template-uri din `sys._MEIPASS`. Build: `build_exe.bat` → `dist\EDIAIBehaviourTracker.exe`. Verificat: exe pornește serverul, servește dashboard-ul, generează PDF (reportlab bundle-uit) și persistă `instance\behaviour.db` lângă exe.
 
 ## Task-uri rămase (post-pas 5)
 - [x] Persistare formular: `POST /api/incidents` implementat; `saveIncident()` salvează în SQLite. Demo children seed-uite generic.
