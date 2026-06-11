@@ -111,9 +111,19 @@ SUPPORT_LEVELS = ["High", "Medium", "Low"]
 # 5. SETĂRI FLASK / BAZĂ DE DATE
 # ---------------------------------------------------------------------------
 import os
+import sys
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-INSTANCE_DIR = os.path.join(BASE_DIR, "instance")
+
+
+def app_data_dir():
+    """Dir scriibil pentru DB: lângă .exe când e frozen, altfel rădăcina proiectului."""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return BASE_DIR
+
+
+INSTANCE_DIR = os.path.join(app_data_dir(), "instance")
 
 SQLALCHEMY_DATABASE_URI = "sqlite:///" + os.path.join(INSTANCE_DIR, "behaviour.db")
 SQLALCHEMY_TRACK_MODIFICATIONS = False
@@ -123,7 +133,7 @@ SECRET_KEY = os.environ.get("EDIAI_SECRET_KEY", "dev-change-me")
 
 # Dacă True, `app.py` populează baza de date goală cu un set demonstrativ
 # minim de elevi/incidente (NU datele reale din mockup) la prima rulare.
-SEED_DEMO_DATA = True
+SEED_DEMO_DATA = not getattr(sys, "frozen", False)   # blank slate în build-ul .exe
 
 # Elevi generici de demonstrație (NU nume reale). Folosiți doar dacă
 # SEED_DEMO_DATA este True. keyWorker referă un nume din STAFF.
