@@ -763,6 +763,7 @@ function renderChildDetail(id){
 // ─── REPORTS ─────────────────────────────────────────────────────────────────
 function renderReports(){
   const childOpts=CHILDREN.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')||'<option value="">No children added yet</option>';
+  const classOpts=ROOMS.map(r=>`<option value="${r.id}">${r.name}</option>`).join('')||'<option value="">No classes yet</option>';
   // Blank slate: niciun raport generat încă.
   const recentReports=[];
   const reportRows=recentReports.map(r=>`<tr>
@@ -779,7 +780,7 @@ function renderReports(){
     <div class="form-grid" style="max-width:100%">
       <div class="form-group">
         <label>Report Type</label>
-        <select id="r-type" onchange="toggleReportChild()">
+        <select id="r-type" onchange="toggleReportInputs()">
           <option>Individual Child</option>
           <option>Class Summary</option>
           <option>Whole School</option>
@@ -796,6 +797,10 @@ function renderReports(){
       <div class="form-group" id="r-child-wrap">
         <label>Child</label>
         <select id="r-child">${childOpts}</select>
+      </div>
+      <div class="form-group" id="r-class-wrap" style="display:none">
+        <label>Class</label>
+        <select id="r-class">${classOpts}</select>
       </div>
       <div class="form-group" style="align-self:flex-end">
         <button class="btn-accent" style="width:100%;padding:11px" onclick="generateReport()">&#128196; Generate Report</button>
@@ -878,19 +883,28 @@ function renderReports(){
   </div>`;
 }
 
-function toggleReportChild(){
+function toggleReportInputs(){
   const t=document.getElementById('r-type').value;
-  const w=document.getElementById('r-child-wrap');
-  if(w) w.style.display=t==='Individual Child'?'flex':'none';
+  const cw=document.getElementById('r-child-wrap');
+  const kw=document.getElementById('r-class-wrap');
+  if(cw) cw.style.display=t==='Individual Child'?'flex':'none';
+  if(kw) kw.style.display=t==='Class Summary'?'flex':'none';
 }
 function generateReport(){
   const type=document.getElementById('r-type').value;
-  if(type!=='Individual Child'){showToast('Report generation not yet implemented');return;}
-  const id=document.getElementById('r-child').value;
-  if(!id){alert('Please select a child.');return;}
   const periodMap={'This Week':'week','This Month':'month','This Term':'term'};
   const period=periodMap[document.getElementById('r-period').value]||'month';
-  window.location='/api/reports/child/'+id+'?period='+period;
+  if(type==='Individual Child'){
+    const id=document.getElementById('r-child').value;
+    if(!id){alert('Please select a child.');return;}
+    window.location='/api/reports/child/'+id+'?period='+period;
+  }else if(type==='Class Summary'){
+    const rid=document.getElementById('r-class').value;
+    if(!rid){alert('Please select a class.');return;}
+    window.location='/api/reports/class/'+rid+'?period='+period;
+  }else{
+    window.location='/api/reports/school?period='+period;
+  }
 }
 
 // ─── SETTINGS ────────────────────────────────────────────────────────────────
