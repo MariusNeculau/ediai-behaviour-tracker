@@ -223,3 +223,9 @@ def test_update_system_blank_name_returns_400(client):
 def test_update_system_blank_roll_returns_400(client):
     res = client.put("/api/system", json={"name": "Oak Primary", "roll_number": ""})
     assert res.status_code == 400
+
+
+def test_dashboard_reflects_system_config(client):
+    client.put("/api/system", json={"name": "Maple Special School", "roll_number": "99999Z"})
+    html = client.get("/").get_data(as_text=True)
+    assert "Maple Special School" in html
