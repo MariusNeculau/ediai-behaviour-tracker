@@ -181,3 +181,17 @@ def test_archive_child_keeps_row_and_incidents(app, client, child_id):
     with app.app_context():
         assert db.session.get(Child, child_id) is not None
         assert Incident.query.filter_by(child_id=child_id).count() == 1
+
+
+def test_system_config_seeded_from_config(app):
+    import config
+    from serializers import serialize_system_config
+    from models import SystemConfig
+
+    with app.app_context():
+        sc = SystemConfig.query.first()
+        assert sc is not None
+        assert SystemConfig.query.count() == 1
+        out = serialize_system_config(sc)
+        assert out["name"] == config.SCHOOL["name"]
+        assert out["roll_number"] == config.SCHOOL["roll_number"]
