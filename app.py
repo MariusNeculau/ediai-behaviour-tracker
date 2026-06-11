@@ -73,6 +73,8 @@ def create_app():
     register_routes(app)
     from settings_api import settings_bp
     app.register_blueprint(settings_bp)
+    from reports_api import reports_bp
+    app.register_blueprint(reports_bp)
     return app
 
 

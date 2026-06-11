@@ -26,7 +26,7 @@ Migrarea aplicației de la un stack Web (Next.js/Firebase) la un stack Local Des
   - [x] Children API (`/api/children` GET/POST/PUT/DELETE) — soft-delete păstrează incidentele; validare clasă/key worker/support.
   - [x] Frontend Settings (tabele + modale Add/Edit/Archive, rooms dinamice). Teste verzi (27 passed).
 - [x] System Settings (branch `feature/system-settings`): identitatea școlii (nume + roll number) mutată din `config.py` în tabelul `system_config` (single-row), editabilă din Settings → System (`GET`/`PUT /api/system`, ambele câmpuri obligatorii). `config.py` rămâne doar default-ul de seed. Teste verzi (33 passed).
-- Generare reală rapoarte PDF.
+- [x] Generare reală rapoarte PDF: raport "management" Individual Child (ReportLab, pure-Python) — Student Details, Key Stats, Incident Summary, Pattern Analysis agregat pe 3 coloane (Triggers/Behaviors/Actions Taken), subsol "Page X of Y", antet cu School Name + Roll Number din SystemConfig. `GET /api/reports/child/<id>?period=week|month|term`, download on-the-fly. Class Summary / Whole School rămân fast-follow.
 
 ## Status:
 Backend + frontend generic funcționale local (Flask + SQLite). Rulat și verificat prin test client (`GET /` 200, `GET /api/config` 200). Următorul pas major: pasul 6 (PyInstaller) sau persistarea incidentelor.

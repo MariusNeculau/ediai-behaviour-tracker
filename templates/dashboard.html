@@ -762,7 +762,7 @@ function renderChildDetail(id){
 
 // ─── REPORTS ─────────────────────────────────────────────────────────────────
 function renderReports(){
-  const childOpts=CHILDREN.map(c=>`<option>${c.name}</option>`).join('')||'<option value="">No children added yet</option>';
+  const childOpts=CHILDREN.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')||'<option value="">No children added yet</option>';
   // Blank slate: niciun raport generat încă.
   const recentReports=[];
   const reportRows=recentReports.map(r=>`<tr>
@@ -795,10 +795,10 @@ function renderReports(){
       </div>
       <div class="form-group" id="r-child-wrap">
         <label>Child</label>
-        <select>${childOpts}</select>
+        <select id="r-child">${childOpts}</select>
       </div>
       <div class="form-group" style="align-self:flex-end">
-        <button class="btn-accent" style="width:100%;padding:11px" onclick="showToast('Report generation not yet implemented')">&#128196; Generate Report</button>
+        <button class="btn-accent" style="width:100%;padding:11px" onclick="generateReport()">&#128196; Generate Report</button>
       </div>
     </div>
   </div>
@@ -882,6 +882,15 @@ function toggleReportChild(){
   const t=document.getElementById('r-type').value;
   const w=document.getElementById('r-child-wrap');
   if(w) w.style.display=t==='Individual Child'?'flex':'none';
+}
+function generateReport(){
+  const type=document.getElementById('r-type').value;
+  if(type!=='Individual Child'){showToast('Report generation not yet implemented');return;}
+  const id=document.getElementById('r-child').value;
+  if(!id){alert('Please select a child.');return;}
+  const periodMap={'This Week':'week','This Month':'month','This Term':'term'};
+  const period=periodMap[document.getElementById('r-period').value]||'month';
+  window.location='/api/reports/child/'+id+'?period='+period;
 }
 
 // ─── SETTINGS ────────────────────────────────────────────────────────────────
