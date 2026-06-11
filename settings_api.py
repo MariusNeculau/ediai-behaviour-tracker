@@ -64,3 +64,55 @@ def delete_room(room_id):
     room.active = False
     db.session.commit()
     return jsonify(serialize_room(room))
+
+
+# ─── Staff ──────────────────────────────────────────────────────────────────
+
+@settings_bp.route("/staff", methods=["GET"])
+def list_staff():
+    q = Staff.query if request.args.get("all") else Staff.query.filter_by(active=True)
+    return jsonify([serialize_staff(s) for s in q.order_by(Staff.name).all()])
+
+
+@settings_bp.route("/staff", methods=["POST"])
+def create_staff():
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Name is required"}), 400
+    if Staff.query.filter_by(name=name).first():
+        return jsonify({"error": "A staff member with that name already exists"}), 400
+    member = Staff(name=name, role=(data.get("role") or "").strip() or None)
+    db.session.add(member)
+    db.session.commit()
+    return jsonify(serialize_staff(member)), 201
+
+
+@settings_bp.route("/staff/<int:staff_id>", methods=["PUT"])
+def update_staff(staff_id):
+    member = db.session.get(Staff, staff_id)
+    if member is None:
+        return jsonify({"error": "Unknown staff member"}), 404
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "Name is required"}), 400
+    if Staff.query.filter(Staff.name == name, Staff.id != staff_id).first():
+        return jsonify({"error": "A staff member with that name already exists"}), 400
+    member.name = name
+    member.role = (data.get("role") or "").strip() or None
+    db.session.commit()
+    return jsonify(serialize_staff(member))
+
+
+@settings_bp.route("/staff/<int:staff_id>", methods=["DELETE"])
+def delete_staff(staff_id):
+    member = db.session.get(Staff, staff_id)
+    if member is None:
+        return jsonify({"error": "Unknown staff member"}), 404
+    in_use = Child.query.filter_by(key_worker_id=staff_id, active=True).count()
+    if in_use:
+        return jsonify({"error": f"Reassign {in_use} student(s) to another key worker first"}), 409
+    member.active = False
+    db.session.commit()
+    return jsonify(serialize_staff(member))

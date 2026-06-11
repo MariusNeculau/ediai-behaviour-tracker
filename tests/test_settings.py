@@ -79,3 +79,41 @@ def test_archive_room_in_use_returns_409(app, client, room_id):
         db.session.commit()
     res = client.delete(f"/api/rooms/{room_id}")
     assert res.status_code == 409
+
+
+def test_create_and_list_staff(client):
+    res = client.post("/api/staff", json={"name": "New Teacher", "role": "Teacher"})
+    assert res.status_code == 201
+    names = [s["name"] for s in client.get("/api/staff").get_json()]
+    assert "New Teacher" in names
+
+
+def test_create_staff_duplicate_returns_400(client):
+    # "Staff Member 1" is seeded from config
+    res = client.post("/api/staff", json={"name": "Staff Member 1"})
+    assert res.status_code == 400
+
+
+def test_edit_staff(client):
+    sid = client.post("/api/staff", json={"name": "Temp"}).get_json()["id"]
+    res = client.put(f"/api/staff/{sid}", json={"name": "Temp", "role": "SNA"})
+    assert res.status_code == 200
+    assert res.get_json()["role"] == "SNA"
+
+
+def test_archive_staff_without_children(client):
+    sid = client.post("/api/staff", json={"name": "Lonely"}).get_json()["id"]
+    res = client.delete(f"/api/staff/{sid}")
+    assert res.status_code == 200
+
+
+def test_archive_staff_keyworker_returns_409(app, client, room_id, staff_id):
+    from models import db, Child
+
+    with app.app_context():
+        db.session.add(
+            Child(name="Kid", room_id=room_id, support="High", key_worker_id=staff_id)
+        )
+        db.session.commit()
+    res = client.delete(f"/api/staff/{staff_id}")
+    assert res.status_code == 409
