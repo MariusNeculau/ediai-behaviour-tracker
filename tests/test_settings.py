@@ -117,3 +117,67 @@ def test_archive_staff_keyworker_returns_409(app, client, room_id, staff_id):
         db.session.commit()
     res = client.delete(f"/api/staff/{staff_id}")
     assert res.status_code == 409
+
+
+def test_create_child_valid(client, room_id, staff_id):
+    res = client.post(
+        "/api/children",
+        json={"name": "Alice", "roomId": room_id, "age": 7, "support": "High", "keyWorkerId": staff_id},
+    )
+    assert res.status_code == 201
+    body = res.get_json()
+    assert body["roomId"] == room_id
+    assert body["keyWorkerId"] == staff_id
+    assert body["name"] == "Alice"
+
+
+def test_create_child_unknown_room_returns_400(client):
+    res = client.post("/api/children", json={"name": "Bob", "roomId": 99999})
+    assert res.status_code == 400
+
+
+def test_create_child_blank_name_returns_400(client, room_id):
+    res = client.post("/api/children", json={"name": "", "roomId": room_id})
+    assert res.status_code == 400
+
+
+def test_update_child_room_preserves_incidents(app, client, child_id):
+    from models import db, Incident, Room
+    from datetime import datetime
+
+    with app.app_context():
+        db.session.add(
+            Incident(child_id=child_id, occurred_at=datetime(2026, 6, 11, 9, 30), type="Crisis", severity="High")
+        )
+        db.session.commit()
+        other_room = Room.query.filter_by(name="Room 2").first().id
+
+    res = client.put(f"/api/children/{child_id}", json={"name": "Test Child", "roomId": other_room})
+    assert res.status_code == 200
+    assert res.get_json()["roomId"] == other_room
+
+    with app.app_context():
+        assert Incident.query.filter_by(child_id=child_id).count() == 1
+
+
+def test_archive_child_keeps_row_and_incidents(app, client, child_id):
+    from models import db, Child, Incident
+    from datetime import datetime
+
+    with app.app_context():
+        db.session.add(
+            Incident(child_id=child_id, occurred_at=datetime(2026, 6, 11, 9, 30), type="Crisis", severity="High")
+        )
+        db.session.commit()
+
+    res = client.delete(f"/api/children/{child_id}")
+    assert res.status_code == 200
+
+    active = client.get("/api/children").get_json()
+    assert all(c["id"] != child_id for c in active)
+    archived = client.get("/api/children?all=1").get_json()
+    assert any(c["id"] == child_id for c in archived)
+
+    with app.app_context():
+        assert db.session.get(Child, child_id) is not None
+        assert Incident.query.filter_by(child_id=child_id).count() == 1

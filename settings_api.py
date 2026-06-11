@@ -116,3 +116,79 @@ def delete_staff(staff_id):
     member.active = False
     db.session.commit()
     return jsonify(serialize_staff(member))
+
+
+# ─── Children ───────────────────────────────────────────────────────────────
+
+def _resolve_child_payload(data):
+    """Validate a child payload. Returns (fields, error, status)."""
+    name = (data.get("name") or "").strip()
+    if not name:
+        return None, "Name is required", 400
+
+    room_id = data.get("roomId")
+    room = db.session.get(Room, room_id) if room_id else None
+    if room is None or not room.active:
+        return None, "A valid class is required", 400
+
+    key_worker_id = data.get("keyWorkerId") or None
+    if key_worker_id:
+        kw = db.session.get(Staff, key_worker_id)
+        if kw is None or not kw.active:
+            return None, "Unknown key worker", 400
+
+    support = data.get("support")
+    if support and support not in config.SUPPORT_LEVELS:
+        return None, "Invalid support level", 400
+
+    fields = {
+        "name": name,
+        "room_id": room.id,
+        "key_worker_id": key_worker_id,
+        "age": data.get("age"),
+        "support": support,
+    }
+    return fields, None, None
+
+
+@settings_bp.route("/children", methods=["GET"])
+def list_children():
+    q = Child.query if request.args.get("all") else Child.query.filter_by(active=True)
+    return jsonify([serialize_child(c) for c in q.order_by(Child.name).all()])
+
+
+@settings_bp.route("/children", methods=["POST"])
+def create_child():
+    data = request.get_json(silent=True) or {}
+    fields, error, status = _resolve_child_payload(data)
+    if error:
+        return jsonify({"error": error}), status
+    child = Child(**fields)
+    db.session.add(child)
+    db.session.commit()
+    return jsonify(serialize_child(child)), 201
+
+
+@settings_bp.route("/children/<int:child_id>", methods=["PUT"])
+def update_child(child_id):
+    child = db.session.get(Child, child_id)
+    if child is None:
+        return jsonify({"error": "Unknown child"}), 404
+    data = request.get_json(silent=True) or {}
+    fields, error, status = _resolve_child_payload(data)
+    if error:
+        return jsonify({"error": error}), status
+    for key, value in fields.items():
+        setattr(child, key, value)
+    db.session.commit()
+    return jsonify(serialize_child(child))
+
+
+@settings_bp.route("/children/<int:child_id>", methods=["DELETE"])
+def delete_child(child_id):
+    child = db.session.get(Child, child_id)
+    if child is None:
+        return jsonify({"error": "Unknown child"}), 404
+    child.active = False
+    db.session.commit()
+    return jsonify(serialize_child(child))
