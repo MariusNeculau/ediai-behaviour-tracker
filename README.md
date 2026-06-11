@@ -6,6 +6,8 @@ Built in Ireland, for Irish schools.
 
 [![Download the app](https://img.shields.io/github/v/release/MariusNeculau/ediai-behaviour-tracker?label=Download%20.exe&style=for-the-badge&logo=windows)](https://github.com/MariusNeculau/ediai-behaviour-tracker/releases/latest)
 
+![EDI AI Behaviour Tracker — dashboard](docs/screenshot.png)
+
 ## Download
 
 **[⬇ Download the latest Windows app (.exe)](https://github.com/MariusNeculau/ediai-behaviour-tracker/releases/latest/download/EDIAIBehaviourTracker.exe)**
