@@ -20,3 +20,22 @@ def test_incident_has_notes_column(app, child_id):
         db.session.commit()
         fetched = db.session.get(Incident, inc.id)
         assert fetched.notes == "Parent contacted"
+
+
+def test_demo_children_seeded_when_enabled(monkeypatch, tmp_path):
+    import config
+
+    db_file = tmp_path / "seed.db"
+    monkeypatch.setattr(config, "SQLALCHEMY_DATABASE_URI", f"sqlite:///{db_file}")
+    monkeypatch.setattr(config, "SEED_DEMO_DATA", True)
+
+    import app as app_module
+    from models import Child
+
+    application = app_module.create_app()
+    with application.app_context():
+        assert Child.query.count() == len(config.DEMO_CHILDREN)
+        assert Child.query.count() > 0
+        # key worker linked to a seeded Staff row
+        first = Child.query.first()
+        assert first.key_worker is not None

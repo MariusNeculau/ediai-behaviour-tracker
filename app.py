@@ -96,6 +96,20 @@ def seed_lookups():
             db.session.add(Staff(name=s["name"], role=s.get("role")))
         db.session.commit()
 
+    if config.SEED_DEMO_DATA and Child.query.count() == 0:
+        staff_by_name = {s.name: s for s in Staff.query.all()}
+        for d in config.DEMO_CHILDREN:
+            db.session.add(
+                Child(
+                    name=d["name"],
+                    room=d["room"],
+                    age=d.get("age"),
+                    support=d.get("support"),
+                    key_worker=staff_by_name.get(d.get("keyWorker")),
+                )
+            )
+        db.session.commit()
+
 
 def register_routes(app):
 
