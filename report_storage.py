@@ -5,6 +5,7 @@ când e frozen, altfel rădăcina proiectului), în loc să le trimită ca downl
 """
 
 import os
+from datetime import datetime
 
 import config
 
@@ -24,3 +25,29 @@ def save_report(filename, data):
     with open(path, "wb") as f:
         f.write(data)
     return path
+
+
+def list_saved_reports():
+    """Fișierele din Rapoarte_Salvate/, cele mai noi primele.
+
+    Întoarce [{"filename": str, "generated": "dd Mon yyyy HH:MM"}], sortate
+    descrescător după data modificării. [] dacă folderul nu există.
+    """
+    folder = reports_dir()
+    if not os.path.isdir(folder):
+        return []
+    entries = []
+    for name in os.listdir(folder):
+        path = os.path.join(folder, name)
+        if not os.path.isfile(path):
+            continue
+        mtime = os.path.getmtime(path)
+        entries.append({
+            "filename": name,
+            "generated": datetime.fromtimestamp(mtime).strftime("%d %b %Y %H:%M"),
+            "_mtime": mtime,
+        })
+    entries.sort(key=lambda e: e["_mtime"], reverse=True)
+    for e in entries:
+        del e["_mtime"]
+    return entries
