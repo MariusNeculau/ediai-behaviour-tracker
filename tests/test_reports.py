@@ -125,19 +125,22 @@ def test_render_child_report_pdf_empty_state():
     assert out[:4] == b"%PDF"
 
 
-def test_child_report_pdf_download(client, child_id):
+def test_child_report_pdf_download(client, child_id, saved_reports_dir):
     res = client.get(f"/api/reports/child/{child_id}?period=month")
     assert res.status_code == 200
-    assert res.mimetype == "application/pdf"
-    assert res.data[:4] == b"%PDF"
-    cd = res.headers["Content-Disposition"]
-    assert "Test_Child" in cd and ".pdf" in cd
+    body = res.get_json()
+    assert body["success"] is True
+    assert body["folder"] == "Rapoarte_Salvate"
+    assert "Test_Child" in body["filename"] and body["filename"].endswith(".pdf")
+    saved = saved_reports_dir / body["filename"]
+    assert saved.is_file()
+    assert saved.read_bytes().startswith(b"%PDF")
 
 
-def test_child_report_default_period(client, child_id):
+def test_child_report_default_period(client, child_id, saved_reports_dir):
     res = client.get(f"/api/reports/child/{child_id}")
     assert res.status_code == 200
-    assert res.data[:4] == b"%PDF"
+    assert res.get_json()["success"] is True
 
 
 def test_child_report_unknown_child_returns_404(client):
@@ -150,7 +153,7 @@ def test_child_report_invalid_period_returns_400(client, child_id):
     assert res.status_code == 400
 
 
-def test_child_report_with_incident_still_pdf(app, client, child_id):
+def test_child_report_with_incident_still_pdf(app, client, child_id, saved_reports_dir):
     from datetime import datetime
     from models import db, Incident
 
@@ -164,7 +167,9 @@ def test_child_report_with_incident_still_pdf(app, client, child_id):
 
     res = client.get(f"/api/reports/child/{child_id}?period=term")
     assert res.status_code == 200
-    assert res.data[:4] == b"%PDF"
+    body = res.get_json()
+    assert body["success"] is True
+    assert (saved_reports_dir / body["filename"]).read_bytes().startswith(b"%PDF")
 
 
 def test_aggregate_shared():
@@ -266,13 +271,13 @@ def test_render_school_report_pdf():
     assert out[:4] == b"%PDF"
 
 
-def test_class_report_pdf_download(client, room_id):
+def test_class_report_pdf_download(client, room_id, saved_reports_dir):
     res = client.get(f"/api/reports/class/{room_id}?period=month")
     assert res.status_code == 200
-    assert res.mimetype == "application/pdf"
-    assert res.data[:4] == b"%PDF"
-    cd = res.headers["Content-Disposition"]
-    assert "Class" in cd and ".pdf" in cd
+    body = res.get_json()
+    assert body["success"] is True
+    assert "Class" in body["filename"] and body["filename"].endswith(".pdf")
+    assert (saved_reports_dir / body["filename"]).read_bytes().startswith(b"%PDF")
 
 
 def test_class_report_unknown_room_returns_404(client):
@@ -285,11 +290,13 @@ def test_class_report_invalid_period_returns_400(client, room_id):
     assert res.status_code == 400
 
 
-def test_school_report_pdf_download(client):
+def test_school_report_pdf_download(client, saved_reports_dir):
     res = client.get("/api/reports/school?period=term")
     assert res.status_code == 200
-    assert res.data[:4] == b"%PDF"
-    assert "Whole_School" in res.headers["Content-Disposition"]
+    body = res.get_json()
+    assert body["success"] is True
+    assert "Whole_School" in body["filename"]
+    assert (saved_reports_dir / body["filename"]).read_bytes().startswith(b"%PDF")
 
 
 def test_school_report_invalid_period_returns_400(client):
