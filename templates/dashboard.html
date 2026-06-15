@@ -771,7 +771,7 @@ function renderReports(){
     <td><span class="badge badge-resolved">${r.type}</span></td>
     <td style="font-size:13px">${r.child}</td>
     <td style="font-size:13px;color:var(--gray-500)">${r.date}</td>
-    <td><button class="dl-btn" onclick="showToast('Downloading ${r.name}…')">&#8681;</button></td>
+    <td><button class="dl-btn" onclick="showToast('Raport salvat local: ${r.name}')">&#8681;</button></td>
   </tr>`).join('');
 
   return `
@@ -894,24 +894,36 @@ function toggleReportInputs(){
   if(cw) cw.style.display=t==='Individual Child'?'flex':'none';
   if(kw) kw.style.display=t==='Class Summary'?'flex':'none';
 }
-function generateReport(){
+async function generateReport(){
   const type=document.getElementById('r-type').value;
   const periodMap={'This Week':'week','This Month':'month','This Term':'term'};
   const period=periodMap[document.getElementById('r-period').value]||'month';
+  let url;
   if(type==='Individual Child'){
     const id=document.getElementById('r-child').value;
     if(!id){alert('Please select a child.');return;}
-    window.location='/api/reports/child/'+id+'?period='+period;
+    url='/api/reports/child/'+id+'?period='+period;
   }else if(type==='Class Summary'){
     const rid=document.getElementById('r-class').value;
     if(!rid){alert('Please select a class.');return;}
-    window.location='/api/reports/class/'+rid+'?period='+period;
+    url='/api/reports/class/'+rid+'?period='+period;
   }else{
-    window.location='/api/reports/school?period='+period;
+    url='/api/reports/school?period='+period;
   }
+  try{
+    const res=await fetch(url);
+    const d=await res.json().catch(()=>({}));
+    if(!res.ok||!d.success){alert('Generare eșuată: '+(d.error||('HTTP '+res.status)));return;}
+    showToast('Raportul a fost salvat local în folderul Rapoarte_Salvate');
+  }catch(err){alert('Network error: '+err.message);}
 }
-function exportIncidentsCsv(){
-  window.location='/api/export/incidents.csv';
+async function exportIncidentsCsv(){
+  try{
+    const res=await fetch('/api/export/incidents.csv');
+    const d=await res.json().catch(()=>({}));
+    if(!res.ok||!d.success){alert('Export eșuat: '+(d.error||('HTTP '+res.status)));return;}
+    showToast('Exportul CSV a fost salvat local în folderul Rapoarte_Salvate');
+  }catch(err){alert('Network error: '+err.message);}
 }
 
 // ─── SETTINGS ────────────────────────────────────────────────────────────────
@@ -1175,10 +1187,9 @@ function showReportModal(name){
     <div style="font-size:48px;margin-bottom:16px">&#128196;</div>
     <div style="font-size:18px;font-weight:700;margin-bottom:8px">Report Generated</div>
     <div style="font-size:14px;color:var(--gray-700);margin-bottom:20px">EDI_AI_Report_${safeName}.pdf</div>
-    <div style="background:var(--gray-100);border-radius:8px;padding:12px;font-size:13px;color:var(--gray-700);margin-bottom:22px">The PDF report has been generated and is ready for download.</div>
+    <div style="background:var(--gray-100);border-radius:8px;padding:12px;font-size:13px;color:var(--gray-700);margin-bottom:22px">Raportul a fost salvat local în folderul Rapoarte_Salvate.</div>
     <div style="display:flex;gap:10px;justify-content:center">
       <button class="btn-outline" onclick="closeOverlay()">Close</button>
-      <button class="btn-primary" style="width:auto;padding:11px 24px" onclick="showToast('Downloading report…');closeOverlay()">&#8681; Download PDF</button>
     </div>
   </div>`;
   overlay.onclick=function(e){if(e.target===overlay) closeOverlay();};
