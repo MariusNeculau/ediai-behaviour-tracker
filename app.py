@@ -15,6 +15,8 @@ Pasul de împachetare (.exe cu PyInstaller) urmează mai târziu în roadmap.
 
 import os
 import sys
+import threading
+import webbrowser
 from datetime import date, datetime
 
 from flask import Flask, jsonify, render_template, request
@@ -226,5 +228,17 @@ def register_routes(app):
 app = create_app()
 
 
+URL = "http://127.0.0.1:5000/"
+
+
+def _open_browser():
+    webbrowser.open(URL)
+
+
 if __name__ == "__main__":
+    # debug=True pornește reloader-ul Werkzeug, care rulează scriptul în două
+    # procese; deschidem browserul doar în procesul de servire ca să nu apară
+    # două tab-uri.
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        threading.Timer(1.5, _open_browser).start()
     app.run(debug=True)
