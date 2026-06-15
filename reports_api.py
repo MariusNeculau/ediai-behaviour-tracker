@@ -16,9 +16,14 @@ from reports import (
     render_report_pdf,
 )
 from exports import incidents_to_csv
-from report_storage import save_report, FOLDER_NAME
+from report_storage import save_report, list_saved_reports, FOLDER_NAME
 
 reports_bp = Blueprint("reports", __name__, url_prefix="/api")
+
+
+@reports_bp.route("/reports/saved", methods=["GET"])
+def list_reports():
+    return jsonify({"reports": list_saved_reports()})
 
 
 def _window_bounds(period, today):

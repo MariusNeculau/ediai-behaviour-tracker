@@ -302,3 +302,19 @@ def test_school_report_pdf_download(client, saved_reports_dir):
 def test_school_report_invalid_period_returns_400(client):
     res = client.get("/api/reports/school?period=nope")
     assert res.status_code == 400
+
+
+def test_list_saved_reports_empty(client, saved_reports_dir):
+    res = client.get("/api/reports/saved")
+    assert res.status_code == 200
+    assert res.get_json() == {"reports": []}
+
+
+def test_list_saved_reports_after_generate(client, saved_reports_dir):
+    gen = client.get("/api/reports/school?period=month")
+    saved_name = gen.get_json()["filename"]
+
+    res = client.get("/api/reports/saved")
+    assert res.status_code == 200
+    names = [r["filename"] for r in res.get_json()["reports"]]
+    assert saved_name in names
