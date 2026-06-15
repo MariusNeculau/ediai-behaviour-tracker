@@ -52,3 +52,11 @@ def staff_id(app):
 
     with app.app_context():
         return Staff.query.filter_by(name="Staff Member 1").first().id
+
+
+@pytest.fixture
+def saved_reports_dir(monkeypatch, tmp_path):
+    """Redirecționează salvarea rapoartelor în tmp_path (nu poluează repo-ul)."""
+    import config
+    monkeypatch.setattr(config, "app_data_dir", lambda: str(tmp_path))
+    return tmp_path / "Rapoarte_Salvate"

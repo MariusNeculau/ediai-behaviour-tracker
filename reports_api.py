@@ -7,7 +7,7 @@ generat la cerere și trimis ca download (fără stocare pe disc).
 import re
 from datetime import date, datetime, timedelta
 
-from flask import Blueprint, Response, jsonify, request
+from flask import Blueprint, jsonify, request
 
 from models import db, Child, Incident, Room, SystemConfig
 from serializers import serialize_system_config
@@ -16,6 +16,7 @@ from reports import (
     render_report_pdf,
 )
 from exports import incidents_to_csv
+from report_storage import save_report, FOLDER_NAME
 
 reports_bp = Blueprint("reports", __name__, url_prefix="/api")
 
@@ -57,12 +58,13 @@ def child_report(child_id):
     pdf = render_report_pdf(report)
 
     safe_name = re.sub(r"[^A-Za-z0-9]+", "_", child.name).strip("_") or "child"
-    filename = f"EDI_AI_Report_{safe_name}_{period}_{today:%Y%m%d}.pdf"
-    return Response(
-        pdf,
-        mimetype="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"EDI_AI_Report_{safe_name}_{period}_{stamp}.pdf"
+    try:
+        save_report(filename, pdf)
+    except OSError as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    return jsonify({"success": True, "filename": filename, "folder": FOLDER_NAME})
 
 
 @reports_bp.route("/reports/class/<int:room_id>", methods=["GET"])
@@ -95,12 +97,13 @@ def class_report(room_id):
     pdf = render_report_pdf(report)
 
     safe_name = re.sub(r"[^A-Za-z0-9]+", "_", room.name).strip("_") or "class"
-    filename = f"EDI_AI_Report_Class_{safe_name}_{period}_{today:%Y%m%d}.pdf"
-    return Response(
-        pdf,
-        mimetype="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"EDI_AI_Report_Class_{safe_name}_{period}_{stamp}.pdf"
+    try:
+        save_report(filename, pdf)
+    except OSError as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    return jsonify({"success": True, "filename": filename, "folder": FOLDER_NAME})
 
 
 @reports_bp.route("/reports/school", methods=["GET"])
@@ -129,22 +132,23 @@ def school_report():
     report["school_roll"] = sc["roll_number"]
     pdf = render_report_pdf(report)
 
-    filename = f"EDI_AI_Report_Whole_School_{period}_{today:%Y%m%d}.pdf"
-    return Response(
-        pdf,
-        mimetype="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"EDI_AI_Report_Whole_School_{period}_{stamp}.pdf"
+    try:
+        save_report(filename, pdf)
+    except OSError as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    return jsonify({"success": True, "filename": filename, "folder": FOLDER_NAME})
 
 
 @reports_bp.route("/export/incidents.csv", methods=["GET"])
 def export_incidents_csv():
     incidents = Incident.query.order_by(Incident.occurred_at.desc()).all()
-    body = "﻿" + incidents_to_csv(incidents)   # BOM so Excel detects UTF-8
-    today = date.today()
-    filename = f"EDI_AI_Incidents_{today:%Y%m%d}.csv"
-    return Response(
-        body,
-        mimetype="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    data = ("﻿" + incidents_to_csv(incidents)).encode("utf-8")   # BOM so Excel detects UTF-8
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"EDI_AI_Incidents_{stamp}.csv"
+    try:
+        save_report(filename, data)
+    except OSError as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    return jsonify({"success": True, "filename": filename, "folder": FOLDER_NAME})

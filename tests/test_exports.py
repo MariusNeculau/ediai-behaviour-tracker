@@ -48,17 +48,18 @@ def test_incidents_to_csv_handles_missing():
     assert lines[1].count(",") == 13   # 14 columns -> 13 separators, no embedded commas
 
 
-def test_export_incidents_csv_download(client):
+def test_export_incidents_csv_download(client, saved_reports_dir):
     res = client.get("/api/export/incidents.csv")
     assert res.status_code == 200
-    assert res.mimetype == "text/csv"
-    assert ".csv" in res.headers["Content-Disposition"]
-    text = res.get_data(as_text=True)
+    body = res.get_json()
+    assert body["success"] is True
+    assert body["filename"].endswith(".csv")
+    text = (saved_reports_dir / body["filename"]).read_text(encoding="utf-8")
     assert text[0] == "﻿"               # UTF-8 BOM for Excel
     assert "Date,Time,Child" in text
 
 
-def test_export_incidents_csv_includes_row(app, client, child_id):
+def test_export_incidents_csv_includes_row(app, client, child_id, saved_reports_dir):
     from datetime import datetime
     from models import db, Incident
 
@@ -69,6 +70,8 @@ def test_export_incidents_csv_includes_row(app, client, child_id):
         ))
         db.session.commit()
 
-    text = client.get("/api/export/incidents.csv").get_data(as_text=True)
+    res = client.get("/api/export/incidents.csv")
+    body = res.get_json()
+    text = (saved_reports_dir / body["filename"]).read_text(encoding="utf-8")
     assert "2026-06-10" in text
     assert "Crisis" in text
