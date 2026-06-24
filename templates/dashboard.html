@@ -869,6 +869,7 @@ function renderChildDetail(id){
     <div style="display:flex;align-items:center;gap:12px">
       <span class="${supCls(c.support)}" style="font-size:14px">${c.support} Support</span>
       <button class="btn-accent" onclick="showReportModal('${c.name}')">&#128196; Generate Report</button>
+      <button class="btn-outline" onclick="generateIepReport(${c.id})">&#127919; IEP Report</button>
       <button class="btn-outline" onclick="printEmergencyCard(${c.id})">&#128247; Emergency Card</button>
       <button class="btn-outline" style="border-color:var(--crisis);color:var(--crisis)" onclick="showTab('seizurelog',${c.id})">&#128148; Seizure Log</button>
     </div>
@@ -1665,6 +1666,16 @@ function showIncidentModal(id){
     </div>
   </div>`;
   overlay.onclick=function(e){if(e.target===overlay) closeOverlay();};
+}
+
+async function generateIepReport(childId){
+  try{
+    const res=await fetch(`/api/reports/child/${childId}/iep`);
+    const d=await res.json().catch(()=>({}));
+    if(!res.ok||!d.success){alert('IEP report failed: '+(d.error||('HTTP '+res.status)));return;}
+    showToast('IEP Report saved to Reports folder');
+    if(currentTab==='reports') loadRecentReports();
+  }catch(err){alert('Network error: '+err.message);}
 }
 
 function printEmergencyCard(childId){

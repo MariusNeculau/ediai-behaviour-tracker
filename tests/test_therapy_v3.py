@@ -327,3 +327,51 @@ def test_mastery_reached_field_present_in_api(client, child_id):
     assert res.status_code == 200
     # Even with no goals, the field should be present on any returned goal
     # (test passes vacuously if empty, but confirms no KeyError on usage)
+
+
+# ─── Deliverable 4: IEP Summary PDF ──────────────────────────────────────────
+
+def test_iep_report_unknown_child_returns_404(client):
+    res = client.get("/api/reports/child/99999/iep")
+    assert res.status_code == 404
+
+
+def test_iep_report_no_goals_returns_valid_pdf(client, child_id, saved_reports_dir):
+    res = client.get(f"/api/reports/child/{child_id}/iep")
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["success"] is True
+    assert data["filename"].startswith("EDI_AI_IEP_")
+    pdf_bytes = (saved_reports_dir / data["filename"]).read_bytes()
+    assert pdf_bytes[:4] == b"%PDF"
+
+
+def test_iep_report_with_active_goal_and_sessions_is_valid_pdf(
+        app, client, child_id, goal_id, saved_reports_dir):
+    # Add 3 completed sessions
+    for i in range(3):
+        _add_session(app, child_id, goal_id, "Gestural",
+                     total=10, correct=8+i%2, days_ago=10-i)
+
+    res = client.get(f"/api/reports/child/{child_id}/iep")
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["success"] is True
+    pdf_bytes = (saved_reports_dir / data["filename"]).read_bytes()
+    assert pdf_bytes[:4] == b"%PDF"
+
+
+def test_iep_report_skips_goals_without_completed_sessions(
+        app, client, child_id, goal_id, saved_reports_dir):
+    # goal_id has NO completed sessions — report should still succeed
+    res = client.get(f"/api/reports/child/{child_id}/iep")
+    assert res.status_code == 200
+    assert res.get_json()["success"] is True
+
+
+def test_iep_report_sparkline_function():
+    from reports import _sparkline
+    assert _sparkline([90, 60, 30, 10]) == "▇ ▅ ▃ ▁"
+    assert _sparkline([]) == ""
+    assert _sparkline([100]) == "▇"
+    assert _sparkline([50]) == "▅"

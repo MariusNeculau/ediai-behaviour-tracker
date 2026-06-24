@@ -14,12 +14,32 @@ from serializers import serialize_system_config
 from flask import Response
 from reports import (
     period_start, build_child_report, build_class_report, build_school_report,
-    render_report_pdf, render_emergency_card_pdf,
+    render_report_pdf, render_emergency_card_pdf, render_iep_pdf,
 )
 from exports import incidents_to_csv, seizures_to_csv
 from report_storage import save_report, list_saved_reports, FOLDER_NAME
 
 reports_bp = Blueprint("reports", __name__, url_prefix="/api")
+
+
+@reports_bp.route("/reports/child/<int:child_id>/iep", methods=["GET"])
+def child_iep_report(child_id):
+    child = db.session.get(Child, child_id)
+    if child is None:
+        return jsonify({"error": "Unknown child"}), 404
+
+    goals = TherapyGoal.query.filter_by(child_id=child_id, status="Active").all()
+    sc = serialize_system_config(SystemConfig.query.first())
+    pdf = render_iep_pdf(child, goals, sc["name"], sc["roll_number"])
+
+    safe_name = re.sub(r"[^A-Za-z0-9]+", "_", child.name).strip("_") or "child"
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"EDI_AI_IEP_{safe_name}_{stamp}.pdf"
+    try:
+        save_report(filename, pdf)
+    except OSError as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    return jsonify({"success": True, "filename": filename, "folder": FOLDER_NAME})
 
 
 @reports_bp.route("/reports/child/<int:child_id>/emergency-card", methods=["GET"])

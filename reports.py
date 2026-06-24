@@ -616,6 +616,195 @@ def render_report_pdf(report):
 render_child_report_pdf = render_report_pdf
 
 
+def _sparkline(accuracies):
+    """Convert a list of accuracy percentages to block-character sparkline."""
+    chars = []
+    for pct in accuracies:
+        if pct >= 75:   chars.append("▇")
+        elif pct >= 50: chars.append("▅")
+        elif pct >= 25: chars.append("▃")
+        else:           chars.append("▁")
+    return " ".join(chars)
+
+
+_PROMPT_ABBR = {
+    "Independent": "Ind",
+    "Gestural": "Gest",
+    "Verbal": "Verb",
+    "Physical": "Phys",
+    "Full Physical": "FP",
+}
+
+_PROMPT_SCORE = {
+    "Independent": 1, "Gestural": 2, "Verbal": 3,
+    "Physical": 4, "Full Physical": 5,
+}
+
+
+def render_iep_pdf(child, goals, school_name, school_roll):
+    """IEP Summary PDF — one section per active goal with completed sessions.
+
+    `goals` — list of TherapyGoal objects (caller pre-filters to Active).
+    Goals without any Completed session are skipped.
+    """
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable,
+    )
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=18 * mm, rightMargin=18 * mm,
+        topMargin=16 * mm, bottomMargin=16 * mm,
+    )
+
+    styles = getSampleStyleSheet()
+    primary  = colors.HexColor("#1B5E20")
+    accent   = colors.HexColor("#1565C0")
+    grey_grid= colors.HexColor("#bdbdbd")
+    head_bg  = colors.HexColor("#e8eef7")
+    white    = colors.white
+    dark     = colors.HexColor("#212529")
+    grey_lt  = colors.HexColor("#f1f3f5")
+
+    h1   = ParagraphStyle("ieph1", parent=styles["Title"], fontName="Helvetica-Bold",
+                          fontSize=16, alignment=1, spaceAfter=2)
+    sub  = ParagraphStyle("iepsub", parent=styles["Normal"], fontName="Helvetica",
+                          fontSize=9, textColor=colors.grey, alignment=1)
+    h2   = ParagraphStyle("ieph2", parent=styles["Normal"], fontName="Helvetica-Bold",
+                          fontSize=12, textColor=white)
+    h3   = ParagraphStyle("ieph3", parent=styles["Normal"], fontName="Helvetica-Bold",
+                          fontSize=10, textColor=dark, spaceBefore=6, spaceAfter=3)
+    body = ParagraphStyle("iepbody", parent=styles["Normal"], fontName="Helvetica",
+                          fontSize=9, textColor=dark)
+    small= ParagraphStyle("iepsmall", parent=styles["Normal"], fontName="Helvetica",
+                          fontSize=8, textColor=colors.HexColor("#495057"))
+
+    story = []
+
+    # ── Document header ───────────────────────────────────────────────────────
+    story.append(Paragraph("Individual Education Plan — Therapy Progress", h1))
+    story.append(Paragraph(
+        f"{school_name}  ·  Roll: {school_roll}  ·  "
+        f"Child: {child.name}  ·  Class: {child.room.name if child.room else '—'}  ·  "
+        f"Key Worker: {child.key_worker.name if child.key_worker else '—'}",
+        sub,
+    ))
+    from datetime import date as _date
+    story.append(Paragraph(f"Generated {_date.today().strftime('%d %b %Y')}", sub))
+    story.append(Spacer(1, 10))
+    story.append(HRFlowable(width="100%", thickness=1.5, color=primary))
+    story.append(Spacer(1, 8))
+
+    # ── Goals ────────────────────────────────────────────────────────────────
+    qualifying = [
+        g for g in goals
+        if any(s.status == "Completed" for s in g.sessions)
+    ]
+
+    if not qualifying:
+        story.append(Paragraph(
+            "No active therapy goals with completed sessions on record.", body
+        ))
+    else:
+        for g in qualifying:
+            completed = sorted(
+                [s for s in g.sessions if s.status == "Completed"],
+                key=lambda s: (s.conducted_at or ""),
+            )
+
+            # Goal header band
+            hdr_tbl = Table(
+                [[Paragraph(f"{g.skill_area}  ·  {g.status}", h2)]],
+                colWidths=[174 * mm],
+            )
+            hdr_tbl.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, -1), primary),
+                ("TOPPADDING",    (0, 0), (-1, -1), 7),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+                ("LEFTPADDING",   (0, 0), (-1, -1), 10),
+            ]))
+            story.append(hdr_tbl)
+
+            # Description + target criteria
+            det = [
+                ["Description", g.description or "—"],
+                ["Target Criteria", g.target_criteria or "—"],
+            ]
+            det_tbl = Table(det, colWidths=[34 * mm, 140 * mm])
+            det_tbl.setStyle(TableStyle([
+                ("BACKGROUND",    (0, 0), (0, -1), head_bg),
+                ("FONTNAME",      (0, 0), (0, -1), "Helvetica-Bold"),
+                ("FONTNAME",      (1, 0), (1, -1), "Helvetica"),
+                ("FONTSIZE",      (0, 0), (-1, -1), 9),
+                ("INNERGRID",     (0, 0), (-1, -1), 0.4, grey_grid),
+                ("BOX",           (0, 0), (-1, -1), 0.8, grey_grid),
+                ("TOPPADDING",    (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("LEFTPADDING",   (0, 0), (-1, -1), 5),
+            ]))
+            story.append(det_tbl)
+
+            # Sessions table (last 6)
+            recent = completed[-6:]
+            sess_data = [["Date", "Accuracy", "Prompt Level", "Notes"]]
+            for s in recent:
+                acc = (f"{round(s.correct_trials/s.total_trials*100)}%"
+                       if s.total_trials and s.correct_trials is not None else "—")
+                notes_short = (s.notes[:45] + "…") if s.notes and len(s.notes) > 45 else (s.notes or "—")
+                sess_data.append([
+                    s.conducted_at.strftime("%d %b %Y") if s.conducted_at else "—",
+                    acc,
+                    s.prompt_level or "—",
+                    notes_short,
+                ])
+            sess_tbl = Table(sess_data, colWidths=[26*mm, 22*mm, 28*mm, 98*mm], repeatRows=1)
+            sess_tbl.setStyle(TableStyle([
+                ("BACKGROUND",    (0, 0), (-1, 0), grey_lt),
+                ("FONTNAME",      (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTNAME",      (0, 1), (-1, -1), "Helvetica"),
+                ("FONTSIZE",      (0, 0), (-1, -1), 8),
+                ("ALIGN",         (1, 0), (1, -1), "CENTER"),
+                ("INNERGRID",     (0, 0), (-1, -1), 0.4, grey_grid),
+                ("BOX",           (0, 0), (-1, -1), 0.8, grey_grid),
+                ("TOPPADDING",    (0, 0), (-1, -1), 3),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ("LEFTPADDING",   (0, 0), (-1, -1), 4),
+            ]))
+            story.append(sess_tbl)
+
+            # Accuracy sparkline + prompt trend
+            accuracies = [
+                round(s.correct_trials / s.total_trials * 100)
+                for s in recent
+                if s.total_trials and s.correct_trials is not None
+            ]
+            spark = _sparkline(accuracies) if accuracies else "—"
+
+            prompt_levels = [s.prompt_level for s in recent if s.prompt_level]
+            if len(prompt_levels) >= 2:
+                scores = [_PROMPT_SCORE.get(p, 3) for p in prompt_levels]
+                diff = scores[-1] - scores[0]
+                direction = "↑ Improving" if diff < -0.5 else ("↓ Declining" if diff > 0.5 else "→ Stable")
+                prompt_str = "  →  ".join(_PROMPT_ABBR.get(p, p) for p in prompt_levels[-3:])
+                prompt_line = f"Prompt trend: {prompt_str}  {direction}"
+            else:
+                prompt_line = f"Latest prompt: {prompt_levels[-1]}" if prompt_levels else ""
+
+            trend_text = f"Accuracy sparkline (last {len(accuracies)} sessions): {spark}"
+            if prompt_line:
+                trend_text += f"     |     {prompt_line}"
+            story.append(Paragraph(trend_text, small))
+            story.append(Spacer(1, 10))
+
+    doc.build(story)
+    return buf.getvalue()
+
+
 _EMERGENCY_STEPS = [
     "Stay calm — note the exact time the seizure starts.",
     "Clear the area of hard or sharp objects. Do not restrain the child.",
