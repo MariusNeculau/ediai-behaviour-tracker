@@ -31,6 +31,28 @@ def serialize_child(c):
     }
 
 
+def serialize_seizure_incident(i):
+    """Incident epileptic + SeizureDetail — folosit de seizure log și child summary."""
+    dt = i.occurred_at
+    sd = i.seizure_detail
+    return {
+        "id": i.id,
+        "childId": i.child_id,
+        "childName": i.child.name if i.child else "",
+        "childRoom": i.child.room.name if (i.child and i.child.room) else "",
+        "date": dt.strftime("%d %b %Y") if dt else "",
+        "time": dt.strftime("%H:%M") if dt else "",
+        "seizureType": sd.seizure_type if sd else None,
+        "durationSeconds": sd.duration_seconds if sd else None,
+        "positionDuring": sd.position_during if sd else None,
+        "protocolFollowed": bool(sd.protocol_followed) if sd else False,
+        "emergencyServicesCalled": bool(sd.emergency_services_called) if sd else False,
+        "medicationAdministered": bool(sd.medication_administered) if sd else False,
+        "medicationName": sd.medication_name if sd else None,
+        "staff": i.staff.name if i.staff else "",
+    }
+
+
 def serialize_seizure_detail(sd):
     if sd is None:
         return None

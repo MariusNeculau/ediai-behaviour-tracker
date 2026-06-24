@@ -14,7 +14,7 @@ import config
 from models import db, Child, Staff, Room, SystemConfig, TherapyGoal, TherapySession, Incident
 from serializers import (
     serialize_room, serialize_staff, serialize_child, serialize_system_config,
-    serialize_goal, serialize_therapy_session,
+    serialize_goal, serialize_therapy_session, serialize_seizure_incident,
 )
 
 settings_bp = Blueprint("settings", __name__, url_prefix="/api")
@@ -201,24 +201,6 @@ def delete_child(child_id):
 
 # ─── Child seizure summary ──────────────────────────────────────────────────
 
-def _serialize_seizure_incident(i):
-    dt = i.occurred_at
-    sd = i.seizure_detail
-    return {
-        "id": i.id,
-        "date": dt.strftime("%d %b %Y") if dt else "",
-        "time": dt.strftime("%H:%M") if dt else "",
-        "seizureType": sd.seizure_type if sd else None,
-        "durationSeconds": sd.duration_seconds if sd else None,
-        "positionDuring": sd.position_during if sd else None,
-        "protocolFollowed": bool(sd.protocol_followed) if sd else False,
-        "emergencyServicesCalled": bool(sd.emergency_services_called) if sd else False,
-        "medicationAdministered": bool(sd.medication_administered) if sd else False,
-        "medicationName": sd.medication_name if sd else None,
-        "staff": i.staff.name if i.staff else "",
-    }
-
-
 @settings_bp.route("/children/<int:child_id>/seizure-summary", methods=["GET"])
 def child_seizure_summary(child_id):
     child = db.session.get(Child, child_id)
@@ -261,7 +243,7 @@ def child_seizure_summary(child_id):
         "protocolComplianceRate": protocol_rate,
         "mostCommonType": most_common_type,
         "typeDistribution": type_distribution,
-        "incidents": [_serialize_seizure_incident(i) for i in seizure_incidents[:5]],
+        "incidents": [serialize_seizure_incident(i) for i in seizure_incidents[:5]],
     })
 
 

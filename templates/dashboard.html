@@ -277,6 +277,7 @@ textarea{resize:vertical;min-height:80px}
     <div class="nav-item" onclick="showTab('profiles')"><span class="nav-icon">&#128104;</span> Child Profiles</div>
     <div class="nav-item" onclick="showTab('reports')"><span class="nav-icon">&#128196;</span> Reports</div>
     <div class="nav-item" onclick="showTab('therapy')"><span class="nav-icon">&#127919;</span> Therapy Sessions</div>
+    <div class="nav-item" onclick="showTab('seizurelog')"><span class="nav-icon">&#128148;</span> Seizure Log</div>
     <div class="nav-item" onclick="showTab('settings')"><span class="nav-icon">&#9881;</span> Settings</div>
   </nav>
   <div class="sb-footer">v1.0.0 &nbsp;&#183;&nbsp; GDPR Compliant</div>
@@ -320,6 +321,8 @@ let GOALS = [];
 let THERAPY_SESSIONS = [];
 let therapySubTab = 'goals';
 let therapyGoalFilter = '';
+let SEIZURES = [];
+let seizureChildFilter = '';
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const child = id => CHILDREN.find(c => c.id === id);
@@ -394,11 +397,11 @@ function showToast(msg){
 function closeOverlay(){document.getElementById('overlay').style.display='none';}
 
 // ─── TABS ────────────────────────────────────────────────────────────────────
-const TAB_TITLES={dashboard:'Dashboard',log:'Log Incident',profiles:'Child Profiles',therapy:'Therapy Sessions',reports:'Reports',settings:'Settings'};
+const TAB_TITLES={dashboard:'Dashboard',log:'Log Incident',profiles:'Child Profiles',therapy:'Therapy Sessions',seizurelog:'Seizure Log',reports:'Reports',settings:'Settings'};
 function showTab(tab, extra){
   currentTab=tab;
   document.querySelectorAll('.nav-item').forEach((el,i)=>{
-    const tabs=['dashboard','log','profiles','therapy','reports','settings'];
+    const tabs=['dashboard','log','profiles','therapy','seizurelog','reports','settings'];
     el.classList.toggle('active', tabs[i]===tab);
   });
   document.getElementById('topbar-title').textContent=TAB_TITLES[tab]||tab;
@@ -408,8 +411,9 @@ function showTab(tab, extra){
   if(tab==='dashboard') c.innerHTML=renderDashboard();
   else if(tab==='log') {c.innerHTML=renderLog(); initLogForm();}
   else if(tab==='profiles') c.innerHTML=renderProfiles();
-  else if(tab==='child-detail') c.innerHTML=renderChildDetail(extra);
+  else if(tab==='child-detail') {c.innerHTML=renderChildDetail(extra); loadChildTherapySummary(extra); loadChildSeizureSummary(extra);}
   else if(tab==='therapy') {c.innerHTML=renderTherapyShell(); loadTherapyData();}
+  else if(tab==='seizurelog') {seizureChildFilter=extra||''; c.innerHTML=renderSeizureLogShell(); loadSeizureLog();}
   else if(tab==='reports') {c.innerHTML=renderReports(); loadRecentReports();}
   else if(tab==='settings') c.innerHTML=renderSettings();
 }
@@ -865,6 +869,7 @@ function renderChildDetail(id){
     <div style="display:flex;align-items:center;gap:12px">
       <span class="${supCls(c.support)}" style="font-size:14px">${c.support} Support</span>
       <button class="btn-accent" onclick="showReportModal('${c.name}')">&#128196; Generate Report</button>
+      <button class="btn-outline" style="border-color:var(--crisis);color:var(--crisis)" onclick="showTab('seizurelog',${c.id})">&#128148; Seizure Log</button>
     </div>
   </div>
   <div class="mini-stats">
@@ -969,6 +974,108 @@ function renderTherapySummaryCard(data){
       </div>
     </div>`:''}
   </div>`;
+}
+
+// ─── SEIZURE LOG TAB ─────────────────────────────────────────────────────────
+function renderSeizureLogShell(){
+  return `<div id="seizurelog-body"><div style="color:var(--gray-500);padding:20px">Loading…</div></div>`;
+}
+
+async function loadSeizureLog(){
+  const el=document.getElementById('seizurelog-body');
+  if(!el) return;
+  try{
+    const url='/api/seizures'+(seizureChildFilter?'?childId='+seizureChildFilter:'');
+    const res=await fetch(url);
+    SEIZURES=await res.json();
+  }catch(e){SEIZURES=[];}
+  renderSeizureLogContent();
+}
+
+function renderSeizureLogContent(){
+  const el=document.getElementById('seizurelog-body');
+  if(!el) return;
+
+  const filtered=seizureChildFilter
+    ?SEIZURES.filter(s=>s.childId==seizureChildFilter)
+    :SEIZURES;
+
+  // Summary stats
+  const totalEmg=filtered.filter(s=>s.emergencyServicesCalled).length;
+  const totalNoPro=filtered.filter(s=>!s.protocolFollowed).length;
+  const summaryCards=`
+    <div class="stats-row" style="grid-template-columns:repeat(4,1fr);margin-bottom:18px">
+      <div class="stat-card" style="border-top-color:var(--crisis)">
+        <div class="stat-label">Total Seizures</div>
+        <div class="stat-value" style="color:var(--crisis)">${filtered.length}</div>
+        <div class="stat-sub">All records</div>
+      </div>
+      <div class="stat-card${totalEmg>0?' alert-card':''}">
+        <div class="stat-label">Emergency Services Called</div>
+        <div class="stat-value${totalEmg>0?' red':''}">${totalEmg}</div>
+        <div class="stat-sub">${totalEmg>0?'Requires review':'None recorded'}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Protocol Breaches</div>
+        <div class="stat-value${totalNoPro>0?' red':''}">${totalNoPro}</div>
+        <div class="stat-sub">${totalNoPro>0?'Protocol not followed':'Full compliance'}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Children Affected</div>
+        <div class="stat-value">${new Set(filtered.map(s=>s.childId)).size}</div>
+        <div class="stat-sub">Unique students</div>
+      </div>
+    </div>`;
+
+  // Filter bar
+  const childOpts=`<option value="">All Children</option>`
+    +CHILDREN.map(c=>`<option value="${c.id}"${seizureChildFilter==c.id?' selected':''}>${c.name}</option>`).join('');
+  const filterBar=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+      <select style="padding:8px 12px;font-size:13px;border:1.5px solid var(--gray-300);border-radius:8px;width:auto"
+        onchange="seizureChildFilter=this.value;renderSeizureLogContent()">${childOpts}</select>
+      <div style="font-size:13px;color:var(--gray-500)">${filtered.length} record${filtered.length!==1?'s':''}</div>
+    </div>`;
+
+  // Table rows
+  const rows=filtered.map(s=>{
+    let rowBg='';
+    if(s.emergencyServicesCalled) rowBg='background:#FFEBEE';
+    else if(!s.protocolFollowed)  rowBg='background:#FFF8E1';
+    return `<tr onclick="showIncidentModal(${s.id})" style="cursor:pointer;${rowBg}">
+      <td style="font-size:12px"><strong>${s.date}</strong><br><span style="color:var(--gray-500)">${s.time}</span></td>
+      <td><strong style="font-size:13px">${s.childName}</strong><br><span style="font-size:11px;color:var(--gray-500)">${s.childRoom}</span></td>
+      <td style="font-size:12px">${s.seizureType||'—'}</td>
+      <td style="font-size:12px">${s.durationSeconds!=null?s.durationSeconds+'s':'—'}</td>
+      <td style="font-size:12px">${s.positionDuring||'—'}</td>
+      <td style="text-align:center">${s.protocolFollowed
+        ?'<span style="color:#2E7D32;font-weight:700">&#10003;</span>'
+        :'<span style="color:var(--crisis);font-weight:700">&#10007;</span>'}</td>
+      <td style="text-align:center">${s.emergencyServicesCalled
+        ?'<span style="color:var(--crisis);font-weight:700">Yes</span>'
+        :'<span style="color:var(--gray-500)">No</span>'}</td>
+      <td style="font-size:12px">${s.staff||'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const legend=`
+    <div style="display:flex;gap:16px;font-size:12px;color:var(--gray-700);margin-bottom:10px;flex-wrap:wrap">
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:14px;background:#FFEBEE;border:1px solid #EF9A9A;border-radius:3px;display:inline-block"></span> Emergency services called</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:14px;height:14px;background:#FFF8E1;border:1px solid #FFD54F;border-radius:3px;display:inline-block"></span> Protocol not followed</span>
+    </div>`;
+
+  el.innerHTML=`
+    ${summaryCards}
+    ${filterBar}
+    ${filtered.length?legend:''}
+    <div class="card">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date & Time</th><th>Child</th><th>Seizure Type</th><th>Duration</th><th>Position</th><th style="text-align:center">Protocol</th><th style="text-align:center">Emergency</th><th>Staff</th></tr></thead>
+          <tbody>${rows||'<tr><td colspan="8" style="padding:18px;color:var(--gray-500);text-align:center">No seizure incidents recorded yet</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
 }
 
 // ─── CHILD SEIZURE SUMMARY ───────────────────────────────────────────────────

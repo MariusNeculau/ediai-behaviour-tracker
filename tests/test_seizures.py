@@ -489,3 +489,85 @@ def test_seizure_summary_type_distribution_empty_when_no_detail(app, client, chi
     data = res.get_json()
     # incident without SeizureDetail → no type to count
     assert data["typeDistribution"] == []
+
+
+# ─── GET /api/seizures (Deliverable 3) ───────────────────────────────────────
+
+def test_list_seizures_returns_only_epileptic_incidents(client, seizure_incident_id,
+                                                         non_seizure_incident_id):
+    res = client.get("/api/seizures")
+    assert res.status_code == 200
+    data = res.get_json()
+    assert len(data) == 1
+    assert data[0]["id"] == seizure_incident_id
+
+
+def test_list_seizures_returns_empty_when_none(client):
+    res = client.get("/api/seizures")
+    assert res.status_code == 200
+    assert res.get_json() == []
+
+
+def test_list_seizures_includes_child_and_room(client, child_id, seizure_incident_id):
+    res = client.get("/api/seizures")
+    entry = res.get_json()[0]
+    assert entry["childName"] == "Test Child"
+    assert entry["childRoom"] == "Room 1"
+
+
+def test_list_seizures_includes_seizure_detail_fields(client, seizure_incident_id):
+    res = client.get("/api/seizures")
+    entry = res.get_json()[0]
+    assert entry["seizureType"] == "Tonic-Clonic"
+    assert entry["durationSeconds"] == 90
+    assert entry["positionDuring"] == "Floor"
+    assert entry["protocolFollowed"] is True
+    assert entry["emergencyServicesCalled"] is False
+
+
+def test_list_seizures_filter_by_child(app, client, child_id, seizure_incident_id):
+    from models import db, Child, Room, Incident, SeizureDetail
+    from datetime import datetime
+
+    with app.app_context():
+        room = Room.query.filter_by(name="Room 2").first()
+        other_child = Child(name="Other Child", room_id=room.id, age=9, support="Low")
+        db.session.add(other_child)
+        db.session.flush()
+        inc = Incident(
+            child_id=other_child.id,
+            occurred_at=datetime(2026, 6, 21, 10, 0),
+            type="Crisis", subtype="Epileptic Seizure",
+            severity="Medium", description="Other child seizure", status="Resolved",
+        )
+        db.session.add(inc)
+        db.session.flush()
+        db.session.add(SeizureDetail(incident_id=inc.id, seizure_type="Absence"))
+        db.session.commit()
+
+    # Filter to original child only
+    res = client.get(f"/api/seizures?childId={child_id}")
+    data = res.get_json()
+    assert len(data) == 1
+    assert data[0]["childName"] == "Test Child"
+
+
+def test_list_seizures_ordered_by_date_desc(app, client, child_id):
+    from models import db, Incident
+    from datetime import datetime
+
+    with app.app_context():
+        for day in [10, 20, 15]:
+            inc = Incident(
+                child_id=child_id,
+                occurred_at=datetime(2026, 6, day, 10, 0),
+                type="Crisis", subtype="Epileptic Seizure",
+                severity="High", description=f"Day {day}", status="Resolved",
+            )
+            db.session.add(inc)
+        db.session.commit()
+
+    res = client.get("/api/seizures")
+    data = res.get_json()
+    dates = [d["date"] for d in data]
+    assert dates == sorted(dates, reverse=True)

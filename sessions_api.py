@@ -17,9 +17,24 @@ from flask import Blueprint, jsonify, request
 
 import config
 from models import db, Child, Staff, TherapyGoal, TherapySession, Incident, SeizureDetail
-from serializers import serialize_goal, serialize_therapy_session, serialize_seizure_detail
+from serializers import (
+    serialize_goal, serialize_therapy_session,
+    serialize_seizure_detail, serialize_seizure_incident,
+)
 
 sessions_bp = Blueprint("sessions", __name__, url_prefix="/api")
+
+
+# ─── Seizure Log ─────────────────────────────────────────────────────────────
+
+@sessions_bp.route("/seizures", methods=["GET"])
+def list_seizures():
+    child_id = request.args.get("childId", type=int)
+    q = Incident.query.filter_by(subtype="Epileptic Seizure")
+    if child_id:
+        q = q.filter_by(child_id=child_id)
+    incidents = q.order_by(Incident.occurred_at.desc()).all()
+    return jsonify([serialize_seizure_incident(i) for i in incidents])
 
 
 # ─── Seizure Detail ──────────────────────────────────────────────────────────
