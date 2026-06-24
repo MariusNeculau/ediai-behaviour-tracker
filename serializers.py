@@ -69,6 +69,8 @@ def serialize_seizure_detail(sd):
     }
 
 
+from reports import check_mastery
+
 _PROMPT_ORDER = {
     "Independent": 1,
     "Gestural": 2,
@@ -124,6 +126,7 @@ def serialize_goal(g):
         "avgAccuracy": avg_accuracy,
         "latestPromptLevel": latest_prompt,
         "promptTrend": prompt_trend,
+        "masteryReached": g.status == "Active" and check_mastery(g.target_criteria, completed),
     }
 
 

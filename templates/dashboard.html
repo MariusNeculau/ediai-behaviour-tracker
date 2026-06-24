@@ -1751,7 +1751,15 @@ function renderGoalsTable(){
       <td><span class="prompt-badge">${g.skillArea}</span></td>
       <td style="max-width:260px"><div style="font-size:13px">${desc}</div>${progressLine}</td>
       <td style="font-size:12px;color:var(--gray-700)">${g.targetCriteria||'—'}</td>
-      <td>${goalStatusBadge(g.status)}</td>
+      <td>
+        ${goalStatusBadge(g.status)}
+        ${g.masteryReached?`<div style="margin-top:5px">
+          <button onclick="markGoalAchieved(${g.id})"
+            style="background:#E8F5E9;color:#2E7D32;border:1.5px solid #2E7D32;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">
+            &#10003; Ready to Mark Achieved
+          </button>
+        </div>`:''}
+      </td>
       <td><div style="display:flex;gap:6px">
         <button class="btn-outline" style="font-size:12px;padding:5px 10px" onclick="openGoalModal(${g.id})">Edit</button>
         <button class="btn-accent" style="font-size:12px;padding:5px 10px" onclick="viewGoalSessions(${g.id})">Sessions</button>
@@ -1937,6 +1945,21 @@ function openGoalModal(id){
       <button class="btn-primary" style="width:auto;padding:10px 24px" onclick="saveGoal(${g?g.id:'null'})">Save Goal</button>
     </div></div>`;
   overlay.onclick=function(e){if(e.target===overlay) closeOverlay();};
+}
+
+async function markGoalAchieved(id){
+  if(!confirm('Mark this goal as Achieved?\n\nThis confirms the child has met the target criteria. The goal will be closed.')) return;
+  try{
+    const res=await fetch(`/api/goals/${id}`,{method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({status:'Achieved'})});
+    if(!res.ok){const e=await res.json().catch(()=>({}));alert(e.error||('HTTP '+res.status));return;}
+    const saved=await res.json();
+    const i=GOALS.findIndex(x=>x.id===id);
+    if(i>=0) GOALS[i]=saved;
+    showToast('Goal marked as Achieved');
+    renderTherapyBody();
+  }catch(err){alert('Network error: '+err.message);}
 }
 
 async function saveGoal(id){

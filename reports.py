@@ -5,9 +5,43 @@ Agregarea (period_start, build_child_report) este pură: primește modele deja
 Randarea PDF (render_child_report_pdf) folosește ReportLab Platypus.
 """
 
+import re
 from collections import Counter
 from datetime import datetime, timedelta
 from io import BytesIO
+
+
+_MASTERY_RE = re.compile(
+    r"(\d+)\s*%.*?(\d+)\s*(?:consecutive\s+)?sessions?",
+    re.IGNORECASE,
+)
+
+
+def check_mastery(target_criteria, completed_sessions):
+    """Return True if the last N completed sessions all meet the % threshold.
+
+    Parses target_criteria for patterns like '80% over 3 sessions' or
+    '75% accuracy across 3 consecutive sessions'. Returns False for any
+    unparseable criteria or insufficient data.
+    """
+    if not target_criteria:
+        return False
+    m = _MASTERY_RE.search(target_criteria)
+    if not m:
+        return False
+    threshold, window = int(m.group(1)), int(m.group(2))
+    # Keep only sessions that have trial data, preserve existing order
+    with_data = [
+        s for s in completed_sessions
+        if s.total_trials and s.correct_trials is not None
+    ]
+    recent = with_data[-window:]
+    if len(recent) < window:
+        return False
+    return all(
+        round(s.correct_trials / s.total_trials * 100) >= threshold
+        for s in recent
+    )
 
 
 _WINDOW_DAYS = {"week": 7, "month": 30, "term": 90}
