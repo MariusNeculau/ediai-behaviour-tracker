@@ -108,6 +108,54 @@ STATUSES = ["Active", "Resolved"]
 SUPPORT_LEVELS = ["High", "Medium", "Low"]
 
 # ---------------------------------------------------------------------------
+# 5a. THERAPY SESSIONS — ad-hoc structured sessions
+# ---------------------------------------------------------------------------
+
+THERAPY_SKILL_AREAS = [
+    "Receptive Language",
+    "Expressive Language",
+    "Self-Care",
+    "Social Skills",
+    "Fine Motor",
+    "Gross Motor",
+    "Cognitive Skills",
+    "Communication",
+]
+
+PROMPT_LEVELS = [
+    "Independent",
+    "Gestural",
+    "Verbal",
+    "Physical",
+    "Full Physical",
+]
+
+GOAL_STATUSES = ["Active", "Achieved", "Paused", "Discontinued"]
+
+SESSION_STATUSES = ["Planned", "Completed", "Cancelled"]
+
+# ---------------------------------------------------------------------------
+# 5b. SEIZURE / EPILEPSY LOG
+# ---------------------------------------------------------------------------
+
+SEIZURE_TYPES = [
+    "Tonic-Clonic",
+    "Absence",
+    "Focal",
+    "Atonic",
+    "Myoclonic",
+    "Unknown",
+]
+
+SEIZURE_POSITIONS = [
+    "Standing",
+    "Seated",
+    "Floor",
+    "Lying",
+    "Unknown",
+]
+
+# ---------------------------------------------------------------------------
 # 5. SETĂRI FLASK / BAZĂ DE DATE
 # ---------------------------------------------------------------------------
 import os

@@ -9,8 +9,11 @@ refused with HTTP 409 and an actionable message.
 from flask import Blueprint, jsonify, request
 
 import config
-from models import db, Child, Staff, Room, SystemConfig
-from serializers import serialize_room, serialize_staff, serialize_child, serialize_system_config
+from models import db, Child, Staff, Room, SystemConfig, TherapyGoal, TherapySession
+from serializers import (
+    serialize_room, serialize_staff, serialize_child, serialize_system_config,
+    serialize_goal, serialize_therapy_session,
+)
 
 settings_bp = Blueprint("settings", __name__, url_prefix="/api")
 
@@ -192,6 +195,28 @@ def delete_child(child_id):
     child.active = False
     db.session.commit()
     return jsonify(serialize_child(child))
+
+
+# ─── Child therapy summary ──────────────────────────────────────────────────
+
+@settings_bp.route("/children/<int:child_id>/therapy-summary", methods=["GET"])
+def child_therapy_summary(child_id):
+    child = db.session.get(Child, child_id)
+    if child is None:
+        return jsonify({"error": "Unknown child"}), 404
+
+    goals = TherapyGoal.query.filter_by(child_id=child_id).order_by(TherapyGoal.created_at.desc()).all()
+    recent_sessions = (
+        TherapySession.query
+        .filter_by(child_id=child_id, status="Completed")
+        .order_by(TherapySession.conducted_at.desc())
+        .limit(5)
+        .all()
+    )
+    return jsonify({
+        "goals": [serialize_goal(g) for g in goals],
+        "recentSessions": [serialize_therapy_session(s) for s in recent_sessions],
+    })
 
 
 # ─── System ─────────────────────────────────────────────────────────────────

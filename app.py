@@ -22,8 +22,11 @@ from datetime import date, datetime
 from flask import Flask, jsonify, render_template, request
 
 import config
-from models import db, Child, Staff, Room, Incident, Intervention, SystemConfig
-from serializers import serialize_child, serialize_staff, serialize_room, serialize_system_config
+from models import db, Child, Staff, Room, Incident, Intervention, SystemConfig, SeizureDetail
+from serializers import (
+    serialize_child, serialize_staff, serialize_room, serialize_system_config,
+    serialize_seizure_detail,
+)
 
 
 def _serialize_incident(i):
@@ -34,6 +37,7 @@ def _serialize_incident(i):
         "date": dt.strftime("%Y-%m-%d") if dt else "",
         "time": dt.strftime("%H:%M") if dt else "",
         "type": i.type,
+        "subtype": i.subtype,
         "severity": i.severity,
         "trigger": i.trigger,
         "description": i.description,
@@ -43,6 +47,7 @@ def _serialize_incident(i):
         "staff": i.staff.name if i.staff else "",
         "status": i.status,
         "notes": i.notes,
+        "seizureDetail": serialize_seizure_detail(i.seizure_detail),
     }
 
 
@@ -57,6 +62,12 @@ def _config_payload():
         "outcomes": config.OUTCOMES,
         "statuses": config.STATUSES,
         "support_levels": config.SUPPORT_LEVELS,
+        "seizure_types": config.SEIZURE_TYPES,
+        "seizure_positions": config.SEIZURE_POSITIONS,
+        "therapy_skill_areas": config.THERAPY_SKILL_AREAS,
+        "prompt_levels": config.PROMPT_LEVELS,
+        "goal_statuses": config.GOAL_STATUSES,
+        "session_statuses": config.SESSION_STATUSES,
     }
 
 
@@ -85,6 +96,8 @@ def create_app():
     app.register_blueprint(settings_bp)
     from reports_api import reports_bp
     app.register_blueprint(reports_bp)
+    from sessions_api import sessions_bp
+    app.register_blueprint(sessions_bp)
     return app
 
 
@@ -202,11 +215,14 @@ def register_routes(app):
             else []
         )
 
+        subtype = data.get("subtype") or None
+
         incident = Incident(
             child_id=child.id,
             staff_id=staff.id if staff else None,
             occurred_at=occurred_at,
             type=data["type"],
+            subtype=subtype,
             severity=data["severity"],
             trigger=data.get("trigger"),
             description=data.get("description"),
@@ -217,6 +233,23 @@ def register_routes(app):
         )
         incident.interventions = interventions
         db.session.add(incident)
+
+        sd_data = data.get("seizureDetail") if subtype == "Epileptic Seizure" else None
+        if sd_data:
+            sd = SeizureDetail(
+                incident=incident,
+                seizure_type=sd_data.get("seizureType"),
+                duration_seconds=sd_data.get("durationSeconds"),
+                recovery_time_minutes=sd_data.get("recoveryTimeMinutes"),
+                position_during=sd_data.get("positionDuring"),
+                emergency_services_called=bool(sd_data.get("emergencyServicesCalled")),
+                protocol_followed=bool(sd_data.get("protocolFollowed")),
+                medication_administered=bool(sd_data.get("medicationAdministered")),
+                medication_name=sd_data.get("medicationName"),
+                post_ictal_notes=sd_data.get("postIctalNotes"),
+            )
+            db.session.add(sd)
+
         try:
             db.session.commit()
         except Exception:

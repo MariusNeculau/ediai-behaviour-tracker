@@ -21,6 +21,10 @@ from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
 
+# ---------------------------------------------------------------------------
+# TherapyGoal / TherapySession — structured goal-directed sessions
+# ---------------------------------------------------------------------------
+
 
 # Tabelă de asociere many-to-many: un incident poate avea mai multe intervenții
 incident_interventions = db.Table(
@@ -127,6 +131,7 @@ class Incident(db.Model):
     occurred_at = db.Column(db.DateTime, default=datetime.utcnow)  # înlocuiește date+time
 
     type = db.Column(db.String(40), nullable=False)        # config.INCIDENT_TYPES
+    subtype = db.Column(db.String(40))                     # e.g. "Epileptic Seizure"
     severity = db.Column(db.String(20), nullable=False)    # config.SEVERITY_LEVELS
     trigger = db.Column(db.String(60))                     # config.TRIGGERS
     description = db.Column(db.Text)
@@ -145,3 +150,89 @@ class Incident(db.Model):
 
     def __repr__(self):
         return f"<Incident {self.id} {self.type}/{self.severity} child={self.child_id}>"
+
+
+class SeizureDetail(db.Model):
+    """Extended epilepsy data for Crisis incidents with subtype 'Epileptic Seizure'.
+    One-to-zero-or-one with Incident (enforced by unique constraint on incident_id).
+    """
+
+    __tablename__ = "seizure_detail"
+
+    id = db.Column(db.Integer, primary_key=True)
+    incident_id = db.Column(
+        db.Integer, db.ForeignKey("incident.id"), nullable=False, unique=True
+    )
+
+    seizure_type = db.Column(db.String(60))        # config.SEIZURE_TYPES
+    duration_seconds = db.Column(db.Integer)
+    recovery_time_minutes = db.Column(db.Integer)
+    position_during = db.Column(db.String(40))     # config.SEIZURE_POSITIONS
+
+    emergency_services_called = db.Column(db.Boolean, default=False)
+    protocol_followed = db.Column(db.Boolean, default=False)
+    medication_administered = db.Column(db.Boolean, default=False)
+    medication_name = db.Column(db.String(80))
+
+    post_ictal_notes = db.Column(db.Text)
+
+    incident = db.relationship(
+        "Incident", backref=db.backref("seizure_detail", uselist=False)
+    )
+
+    def __repr__(self):
+        return f"<SeizureDetail incident={self.incident_id} type={self.seizure_type!r}>"
+
+
+class TherapyGoal(db.Model):
+    """Clinical objective set by a supervisor for a specific child."""
+
+    __tablename__ = "therapy_goal"
+
+    id = db.Column(db.Integer, primary_key=True)
+    child_id = db.Column(db.Integer, db.ForeignKey("child.id"), nullable=False)
+    created_by_id = db.Column(db.Integer, db.ForeignKey("staff.id"))
+
+    skill_area = db.Column(db.String(80), nullable=False)  # config.THERAPY_SKILL_AREAS
+    description = db.Column(db.Text, nullable=False)
+    target_criteria = db.Column(db.String(200))            # e.g. "80% over 3 sessions"
+    status = db.Column(db.String(20), default="Active")    # config.GOAL_STATUSES
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    achieved_at = db.Column(db.DateTime)
+
+    child = db.relationship("Child", backref="goals")
+    created_by = db.relationship("Staff", foreign_keys=[created_by_id])
+    sessions = db.relationship("TherapySession", back_populates="goal")
+
+    def __repr__(self):
+        return f"<TherapyGoal {self.id} {self.skill_area!r} child={self.child_id}>"
+
+
+class TherapySession(db.Model):
+    """A planned or completed structured therapy session linked to a goal."""
+
+    __tablename__ = "therapy_session"
+
+    id = db.Column(db.Integer, primary_key=True)
+    child_id = db.Column(db.Integer, db.ForeignKey("child.id"), nullable=False)
+    goal_id = db.Column(db.Integer, db.ForeignKey("therapy_goal.id"), nullable=False)
+    planned_by_id = db.Column(db.Integer, db.ForeignKey("staff.id"))
+    conducted_by_id = db.Column(db.Integer, db.ForeignKey("staff.id"))
+
+    planned_at = db.Column(db.DateTime)
+    conducted_at = db.Column(db.DateTime)
+    status = db.Column(db.String(20), default="Planned")  # config.SESSION_STATUSES
+
+    total_trials = db.Column(db.Integer)
+    correct_trials = db.Column(db.Integer)
+    prompt_level = db.Column(db.String(30))               # config.PROMPT_LEVELS
+    notes = db.Column(db.Text)
+
+    child = db.relationship("Child", backref="therapy_sessions")
+    goal = db.relationship("TherapyGoal", back_populates="sessions")
+    planned_by = db.relationship("Staff", foreign_keys=[planned_by_id])
+    conducted_by = db.relationship("Staff", foreign_keys=[conducted_by_id])
+
+    def __repr__(self):
+        return f"<TherapySession {self.id} {self.status} child={self.child_id}>"

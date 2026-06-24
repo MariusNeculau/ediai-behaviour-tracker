@@ -225,6 +225,25 @@ textarea{resize:vertical;min-height:80px}
 .back-btn{display:inline-flex;align-items:center;gap:6px;color:var(--accent);cursor:pointer;font-size:14px;font-weight:600;background:none;border:none;padding:0;margin-bottom:14px}
 .back-btn:hover{opacity:.75}
 
+/* THERAPY */
+.therapy-tabs{display:flex;gap:0;margin-bottom:22px;border-bottom:2px solid var(--gray-200)}
+.therapy-tab-btn{padding:10px 22px;font-size:14px;font-weight:600;background:none;border:none;cursor:pointer;color:var(--gray-700);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s}
+.therapy-tab-btn.active{color:var(--primary);border-bottom-color:var(--primary)}
+.therapy-tab-btn:hover:not(.active){color:var(--gray-900)}
+.badge-planned{background:#E3F2FD;color:#1565C0}
+.badge-completed{background:#E8F5E9;color:#2E7D32}
+.badge-cancelled{background:#FAFAFA;color:var(--gray-700)}
+.badge-goal-active{background:#E8F5E9;color:#2E7D32}
+.badge-goal-achieved{background:#E3F2FD;color:#1565C0}
+.badge-goal-paused{background:#FFF8E1;color:#E65100}
+.badge-goal-discontinued{background:#FAFAFA;color:var(--gray-700)}
+.prompt-badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;background:#F3E5F5;color:#6A1B9A}
+.seizure-section{border-top:3px solid var(--crisis);margin-top:4px}
+.seizure-section h3{color:var(--crisis)}
+.toggle-check{display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid var(--gray-300);border-radius:8px;cursor:pointer;font-size:14px;transition:all .15s;user-select:none}
+.toggle-check:hover{border-color:var(--secondary)}
+.toggle-check input{width:auto;accent-color:var(--secondary);width:18px;height:18px}
+.toggle-check.on{border-color:var(--crisis);background:#FFEBEE}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideUp{from{transform:translateY(18px);opacity:0}to{transform:translateY(0);opacity:1}}
 .fade-in{animation:fadeIn .25s ease}
@@ -257,6 +276,7 @@ textarea{resize:vertical;min-height:80px}
     <div class="nav-item" onclick="showTab('log')"><span class="nav-icon">&#43;</span> Log Incident</div>
     <div class="nav-item" onclick="showTab('profiles')"><span class="nav-icon">&#128104;</span> Child Profiles</div>
     <div class="nav-item" onclick="showTab('reports')"><span class="nav-icon">&#128196;</span> Reports</div>
+    <div class="nav-item" onclick="showTab('therapy')"><span class="nav-icon">&#127919;</span> Therapy Sessions</div>
     <div class="nav-item" onclick="showTab('settings')"><span class="nav-icon">&#9881;</span> Settings</div>
   </nav>
   <div class="sb-footer">v1.0.0 &nbsp;&#183;&nbsp; GDPR Compliant</div>
@@ -296,6 +316,10 @@ let selectedSeverity = '';
 let selectedInterventions = new Set();
 let profileFilter = '';
 let profileSearch = '';
+let GOALS = [];
+let THERAPY_SESSIONS = [];
+let therapySubTab = 'goals';
+let therapyGoalFilter = '';
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const child = id => CHILDREN.find(c => c.id === id);
@@ -370,11 +394,11 @@ function showToast(msg){
 function closeOverlay(){document.getElementById('overlay').style.display='none';}
 
 // ─── TABS ────────────────────────────────────────────────────────────────────
-const TAB_TITLES={dashboard:'Dashboard',log:'Log Incident',profiles:'Child Profiles',reports:'Reports',settings:'Settings'};
+const TAB_TITLES={dashboard:'Dashboard',log:'Log Incident',profiles:'Child Profiles',therapy:'Therapy Sessions',reports:'Reports',settings:'Settings'};
 function showTab(tab, extra){
   currentTab=tab;
   document.querySelectorAll('.nav-item').forEach((el,i)=>{
-    const tabs=['dashboard','log','profiles','reports','settings'];
+    const tabs=['dashboard','log','profiles','therapy','reports','settings'];
     el.classList.toggle('active', tabs[i]===tab);
   });
   document.getElementById('topbar-title').textContent=TAB_TITLES[tab]||tab;
@@ -385,6 +409,7 @@ function showTab(tab, extra){
   else if(tab==='log') {c.innerHTML=renderLog(); initLogForm();}
   else if(tab==='profiles') c.innerHTML=renderProfiles();
   else if(tab==='child-detail') c.innerHTML=renderChildDetail(extra);
+  else if(tab==='therapy') {c.innerHTML=renderTherapyShell(); loadTherapyData();}
   else if(tab==='reports') {c.innerHTML=renderReports(); loadRecentReports();}
   else if(tab==='settings') c.innerHTML=renderSettings();
 }
@@ -528,7 +553,14 @@ function renderLog(){
         </div>
         <div class="form-group">
           <label for="f-type">Incident Type *</label>
-          <select id="f-type">${typeOpts}</select>
+          <select id="f-type" onchange="onTypeChange()">${typeOpts}</select>
+        </div>
+        <div class="form-group" id="f-subtype-wrap" style="display:none">
+          <label for="f-subtype">Subtype</label>
+          <select id="f-subtype" onchange="onSubtypeChange()">
+            <option value="">— Select subtype —</option>
+            <option value="Epileptic Seizure">Epileptic Seizure</option>
+          </select>
         </div>
         <div class="form-group">
           <label for="f-trigger">Trigger *</label>
@@ -571,6 +603,52 @@ function renderLog(){
         </div>
       </div>
     </div>
+    <div class="form-section seizure-section" id="seizure-section" style="display:none">
+      <h3>&#128148; Seizure Details</h3>
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="sz-type">Seizure Type</label>
+          <select id="sz-type">
+            <option value="">— Select —</option>
+            ${CONFIG.seizure_types.map(t=>`<option>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="sz-position">Position During Seizure</label>
+          <select id="sz-position">
+            <option value="">— Select —</option>
+            ${CONFIG.seizure_positions.map(p=>`<option>${p}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="sz-duration">Duration (seconds)</label>
+          <input type="number" id="sz-duration" min="1" max="600" placeholder="e.g. 90">
+        </div>
+        <div class="form-group">
+          <label for="sz-recovery">Recovery Time (minutes)</label>
+          <input type="number" id="sz-recovery" min="0" max="120" placeholder="e.g. 15">
+        </div>
+        <div class="form-group full" style="display:flex;gap:16px;flex-wrap:wrap">
+          <label class="toggle-check" id="tc-emergency" onclick="toggleCheck('tc-emergency','sz-emergency')">
+            <input type="checkbox" id="sz-emergency"> Emergency Services Called
+          </label>
+          <label class="toggle-check" id="tc-protocol" onclick="toggleCheck('tc-protocol','sz-protocol')">
+            <input type="checkbox" id="sz-protocol"> Protocol Followed
+          </label>
+          <label class="toggle-check" id="tc-medication" onclick="toggleCheck('tc-medication','sz-medication');toggleMedName()">
+            <input type="checkbox" id="sz-medication"> Medication Administered
+          </label>
+        </div>
+        <div class="form-group" id="sz-med-name-wrap" style="display:none">
+          <label for="sz-med-name">Medication Name</label>
+          <input type="text" id="sz-med-name" placeholder="e.g. Midazolam">
+        </div>
+        <div class="form-group full">
+          <label for="sz-postictal">Post-ictal Notes</label>
+          <textarea id="sz-postictal" rows="3" placeholder="Describe the child's state after the seizure — confusion, fatigue, behaviours…"></textarea>
+        </div>
+      </div>
+    </div>
     <button class="btn-primary" onclick="saveIncident()">&#10003; Save Incident</button>
   </div>`;
 }
@@ -578,6 +656,34 @@ function renderLog(){
 function initLogForm(){
   autoFillRoom();
   setSeverity('Medium');
+  onTypeChange();
+}
+function onTypeChange(){
+  const type=document.getElementById('f-type').value;
+  const wrap=document.getElementById('f-subtype-wrap');
+  if(wrap) wrap.style.display=type==='Crisis'?'flex':'none';
+  if(type!=='Crisis'){
+    const sub=document.getElementById('f-subtype');
+    if(sub) sub.value='';
+    const sec=document.getElementById('seizure-section');
+    if(sec) sec.style.display='none';
+  }
+}
+function onSubtypeChange(){
+  const sub=document.getElementById('f-subtype').value;
+  const sec=document.getElementById('seizure-section');
+  if(sec) sec.style.display=sub==='Epileptic Seizure'?'block':'none';
+}
+function toggleCheck(labelId, inputId){
+  const lbl=document.getElementById(labelId);
+  const inp=document.getElementById(inputId);
+  if(!lbl||!inp) return;
+  lbl.classList.toggle('on', inp.checked);
+}
+function toggleMedName(){
+  const checked=document.getElementById('sz-medication').checked;
+  const wrap=document.getElementById('sz-med-name-wrap');
+  if(wrap) wrap.style.display=checked?'flex':'none';
 }
 function autoFillRoom(){
   const sel=document.getElementById('f-child');
@@ -602,6 +708,7 @@ async function saveIncident(){
   const date=document.getElementById('f-date').value;
   const time=document.getElementById('f-time').value;
   const type=document.getElementById('f-type').value;
+  const subtype=(document.getElementById('f-subtype')||{}).value||null;
   const trigger=document.getElementById('f-trigger').value;
   const desc=document.getElementById('f-desc').value.trim();
   const duration=parseInt(document.getElementById('f-duration').value)||0;
@@ -611,8 +718,25 @@ async function saveIncident(){
   if(!childId){alert('Please add a child first (Settings) and select one.');return;}
   if(!desc){alert('Please enter a behaviour description.');return;}
   if(!selectedSeverity){alert('Please select a severity level.');return;}
-  const payload={childId,date,time,type,severity:selectedSeverity,trigger,
-    description:desc,duration,outcome,staff,notes,interventions:[...selectedInterventions]};
+
+  const payload={childId,date,time,type,subtype:subtype||null,severity:selectedSeverity,
+    trigger,description:desc,duration,outcome,staff,notes,
+    interventions:[...selectedInterventions]};
+
+  if(subtype==='Epileptic Seizure'){
+    payload.seizureDetail={
+      seizureType:document.getElementById('sz-type').value||null,
+      durationSeconds:parseInt(document.getElementById('sz-duration').value)||null,
+      recoveryTimeMinutes:parseInt(document.getElementById('sz-recovery').value)||null,
+      positionDuring:document.getElementById('sz-position').value||null,
+      emergencyServicesCalled:document.getElementById('sz-emergency').checked,
+      protocolFollowed:document.getElementById('sz-protocol').checked,
+      medicationAdministered:document.getElementById('sz-medication').checked,
+      medicationName:document.getElementById('sz-medication').checked?(document.getElementById('sz-med-name').value.trim()||null):null,
+      postIctalNotes:document.getElementById('sz-postictal').value.trim()||null,
+    };
+  }
+
   try{
     const res=await fetch('/api/incidents',{method:'POST',
       headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
@@ -675,6 +799,7 @@ function showChildDetail(id){
   c.className='content fade-in';
   void c.offsetWidth;
   c.innerHTML=renderChildDetail(id);
+  loadChildTherapySummary(id);
 }
 
 function renderChildDetail(id){
@@ -757,6 +882,74 @@ function renderChildDetail(id){
       <div class="card-header"><div class="card-title">Most Effective Interventions</div></div>
       <div class="top-list">${ints.map(([v,n])=>`<div class="top-item"><div class="top-item-name">${v}</div><div class="top-item-count">${n}</div></div>`).join('')||'<div style="color:var(--gray-500);font-size:13px">No data</div>'}</div>
     </div>
+  </div>
+  <div id="child-therapy-summary" style="margin-top:18px">
+    <div style="color:var(--gray-500);font-size:13px;padding:6px 0">Loading therapy summary…</div>
+  </div>`;
+}
+
+// ─── CHILD THERAPY SUMMARY ───────────────────────────────────────────────────
+async function loadChildTherapySummary(childId){
+  const el=document.getElementById('child-therapy-summary');
+  if(!el) return;
+  try{
+    const res=await fetch(`/api/children/${childId}/therapy-summary`);
+    if(!res.ok){el.innerHTML='';return;}
+    const data=await res.json();
+    el.innerHTML=renderTherapySummaryCard(data);
+  }catch(e){el.innerHTML='';}
+}
+
+function renderTherapySummaryCard(data){
+  const {goals,recentSessions}=data;
+  if(!goals.length && !recentSessions.length) return '';
+
+  const goalRows=goals.map(g=>{
+    const desc=g.description.length>55?g.description.slice(0,55)+'…':g.description;
+    const progress=g.completedSessions>0
+      ?`<span style="font-size:11px;color:var(--gray-500)">${g.completedSessions} session${g.completedSessions!==1?'s':''} &middot; avg <strong style="color:var(--accent)">${g.avgAccuracy!=null?g.avgAccuracy+'%':'—'}</strong></span>`
+      :`<span style="font-size:11px;color:var(--gray-500)">No sessions yet</span>`;
+    const criteria=g.targetCriteria
+      ?`<div style="font-size:11px;color:var(--gray-500);margin-top:2px">Target: ${g.targetCriteria}</div>`
+      :'';
+    return `<div class="set-row">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class="prompt-badge">${g.skillArea}</span>
+          <span style="font-size:13px">${desc}</span>
+        </div>
+        <div style="margin-top:4px;display:flex;align-items:center;gap:10px">${progress}${criteria}</div>
+      </div>
+      <div>${goalStatusBadge(g.status)}</div>
+    </div>`;
+  }).join('');
+
+  const sessionRows=recentSessions.map(s=>`<tr>
+    <td style="font-size:12px">${s.conductedAt?s.conductedAt.slice(0,10):'—'}</td>
+    <td><span class="prompt-badge">${s.goalSkillArea}</span></td>
+    <td>${s.conductedBy||'—'}</td>
+    <td style="font-weight:700;color:var(--accent)">${s.accuracy!=null?s.accuracy+'%':'—'}</td>
+    <td>${s.promptLevel?`<span class="prompt-badge">${s.promptLevel}</span>`:'—'}</td>
+    <td style="font-size:12px;color:var(--gray-700);max-width:200px">${s.notes||'—'}</td>
+  </tr>`).join('');
+
+  return `
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Therapy Goals &amp; Sessions</div>
+      <button class="btn-outline" style="font-size:12px;padding:5px 12px" onclick="showTab('therapy')">Open Therapy Tab</button>
+    </div>
+    ${goals.length?`<div style="padding:0 6px">${goalRows}</div>`:''}
+    ${recentSessions.length?`
+    <div style="border-top:1px solid var(--gray-200);padding:12px 20px 6px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-700);margin-bottom:10px">Recent Completed Sessions</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date</th><th>Skill Area</th><th>Conducted By</th><th>Accuracy</th><th>Prompt Level</th><th>Notes</th></tr></thead>
+          <tbody>${sessionRows}</tbody>
+        </table>
+      </div>
+    </div>`:''}
   </div>`;
 }
 
@@ -1168,6 +1361,20 @@ function showIncidentModal(id){
   const sev=i.severity==='High'?'<span style="color:var(--crisis);font-weight:700">&#128308; High</span>':
             i.severity==='Medium'?'<span style="color:#E65100;font-weight:700">&#128993; Medium</span>':
             '<span style="color:#2E7D32;font-weight:700">&#128994; Low</span>';
+
+  const sameDaySessions=THERAPY_SESSIONS.filter(s=>
+    s.childId===i.childId &&
+    s.status==='Completed' &&
+    s.conductedAt && s.conductedAt.startsWith(i.date)
+  );
+  const sessionsBanner=sameDaySessions.length
+    ?`<div style="background:#E3F2FD;border:1px solid #90CAF9;border-radius:8px;padding:10px 14px;font-size:13px;color:#0D47A1;display:flex;gap:8px;align-items:flex-start;margin-bottom:4px">
+        <span style="font-size:16px">&#127919;</span>
+        <div><strong>${sameDaySessions.length} therapy session${sameDaySessions.length!==1?'s':''} on this day</strong><br>
+        ${sameDaySessions.map(s=>`${s.goalSkillArea}${s.accuracy!=null?' · '+s.accuracy+'%':''}`).join(' &nbsp;&middot;&nbsp; ')}</div>
+      </div>`
+    :'';
+
   const overlay=document.getElementById('overlay');
   overlay.style.display='flex';
   overlay.className='overlay';
@@ -1192,6 +1399,20 @@ function showIncidentModal(id){
     <div class="modal-row"><div class="modal-lbl">Staff Member</div><div class="modal-val">${i.staff}</div></div>
     <div class="modal-row"><div class="modal-lbl">Status</div><div class="modal-val"><span class="badge ${i.status==='Active'?'badge-active':'badge-resolved'}">${i.status}</span></div></div>
     ${i.notes?`<hr class="modal-divider"><div class="modal-row"><div class="modal-lbl">Notes</div><div class="modal-val">${i.notes}</div></div>`:''}
+    ${i.subtype?`<div class="modal-row"><div class="modal-lbl">Subtype</div><div class="modal-val"><strong>${i.subtype}</strong></div></div>`:''}
+    ${i.seizureDetail?`
+    <hr class="modal-divider">
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--crisis);margin-bottom:10px">&#128148; Seizure Details</div>
+    ${i.seizureDetail.seizureType?`<div class="modal-row"><div class="modal-lbl">Seizure Type</div><div class="modal-val">${i.seizureDetail.seizureType}</div></div>`:''}
+    ${i.seizureDetail.durationSeconds?`<div class="modal-row"><div class="modal-lbl">Duration</div><div class="modal-val">${i.seizureDetail.durationSeconds} seconds</div></div>`:''}
+    ${i.seizureDetail.recoveryTimeMinutes?`<div class="modal-row"><div class="modal-lbl">Recovery Time</div><div class="modal-val">${i.seizureDetail.recoveryTimeMinutes} minutes</div></div>`:''}
+    ${i.seizureDetail.positionDuring?`<div class="modal-row"><div class="modal-lbl">Position During</div><div class="modal-val">${i.seizureDetail.positionDuring}</div></div>`:''}
+    <div class="modal-row"><div class="modal-lbl">Emergency Services</div><div class="modal-val">${i.seizureDetail.emergencyServicesCalled?'<span style="color:var(--crisis);font-weight:700">Yes — called</span>':'No'}</div></div>
+    <div class="modal-row"><div class="modal-lbl">Protocol Followed</div><div class="modal-val">${i.seizureDetail.protocolFollowed?'<span style="color:#2E7D32;font-weight:700">Yes</span>':'No'}</div></div>
+    ${i.seizureDetail.medicationAdministered?`<div class="modal-row"><div class="modal-lbl">Medication</div><div class="modal-val">${i.seizureDetail.medicationName||'Administered (name not recorded)'}</div></div>`:''}
+    ${i.seizureDetail.postIctalNotes?`<div class="modal-row"><div class="modal-lbl">Post-ictal Notes</div><div class="modal-val" style="line-height:1.6">${i.seizureDetail.postIctalNotes}</div></div>`:''}
+    `:''}
+    ${sessionsBanner?`<hr class="modal-divider">${sessionsBanner}`:''}
     <div style="margin-top:18px;display:flex;gap:10px">
       <button class="btn-outline" onclick="closeOverlay()">Close</button>
       <button class="btn-accent" onclick="closeOverlay();showChildDetail(${i.childId})">View Child Profile</button>
@@ -1215,6 +1436,365 @@ function showReportModal(name){
     </div>
   </div>`;
   overlay.onclick=function(e){if(e.target===overlay) closeOverlay();};
+}
+
+// ─── THERAPY SESSIONS ────────────────────────────────────────────────────────
+function goalStatusBadge(s){
+  const m={Active:'badge-goal-active',Achieved:'badge-goal-achieved',Paused:'badge-goal-paused',Discontinued:'badge-goal-discontinued'};
+  return `<span class="badge ${m[s]||'badge-support'}">${s}</span>`;
+}
+function sessionStatusBadge(s){
+  const m={Planned:'badge-planned',Completed:'badge-completed',Cancelled:'badge-cancelled'};
+  return `<span class="badge ${m[s]||'badge-support'}">${s}</span>`;
+}
+
+function renderTherapyShell(){
+  return `
+  <div class="therapy-tabs">
+    <button class="therapy-tab-btn${therapySubTab==='goals'?' active':''}" onclick="switchTherapyTab('goals')">Goals</button>
+    <button class="therapy-tab-btn${therapySubTab==='sessions'?' active':''}" onclick="switchTherapyTab('sessions')">Sessions</button>
+  </div>
+  <div id="therapy-body"><div style="color:var(--gray-500);padding:20px">Loading…</div></div>`;
+}
+
+function switchTherapyTab(tab){
+  therapySubTab=tab;
+  document.querySelectorAll('.therapy-tab-btn').forEach((b,i)=>b.classList.toggle('active',['goals','sessions'][i]===tab));
+  renderTherapyBody();
+}
+
+function renderTherapyBody(){
+  const body=document.getElementById('therapy-body');
+  if(!body) return;
+  body.innerHTML=therapySubTab==='goals'?renderGoalsTable():renderSessionsTable();
+}
+
+function renderGoalsTable(){
+  const childOpts=`<option value="">All Children</option>`+CHILDREN.map(c=>`<option value="${c.id}"${therapyGoalFilter==c.id?' selected':''}>${c.name}</option>`).join('');
+  let goals=GOALS;
+  if(therapyGoalFilter) goals=goals.filter(g=>g.childId==therapyGoalFilter);
+
+  const rows=goals.map(g=>{
+    const desc=g.description.length>60?g.description.slice(0,60)+'…':g.description;
+    const progressLine=g.completedSessions>0
+      ?`<div style="font-size:11px;color:var(--gray-500);margin-top:3px">
+          ${g.completedSessions} session${g.completedSessions!==1?'s':''}&nbsp;&middot;&nbsp;avg&nbsp;<strong style="color:var(--accent)">${g.avgAccuracy!=null?g.avgAccuracy+'%':'—'}</strong>
+        </div>`
+      :'';
+    return `<tr>
+      <td><strong>${g.childName}</strong></td>
+      <td><span class="prompt-badge">${g.skillArea}</span></td>
+      <td style="max-width:260px"><div style="font-size:13px">${desc}</div>${progressLine}</td>
+      <td style="font-size:12px;color:var(--gray-700)">${g.targetCriteria||'—'}</td>
+      <td>${goalStatusBadge(g.status)}</td>
+      <td><div style="display:flex;gap:6px">
+        <button class="btn-outline" style="font-size:12px;padding:5px 10px" onclick="openGoalModal(${g.id})">Edit</button>
+        <button class="btn-accent" style="font-size:12px;padding:5px 10px" onclick="viewGoalSessions(${g.id})">Sessions</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+
+  return `
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+    <select style="padding:8px 12px;font-size:13px;border:1.5px solid var(--gray-300);border-radius:8px;width:auto" onchange="therapyGoalFilter=this.value;renderTherapyBody()">${childOpts}</select>
+    <button class="btn-accent" onclick="openGoalModal(null)">&#43; Add Goal</button>
+  </div>
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Child</th><th>Skill Area</th><th>Description</th><th>Target Criteria</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>${rows||'<tr><td colspan="6" style="padding:16px;color:var(--gray-500);text-align:center">No goals yet — add one to get started</td></tr>'}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function renderAccuracyTrend(filterGoalId){
+  if(!filterGoalId) return '';
+  const sessions=THERAPY_SESSIONS
+    .filter(s=>s.goalId==filterGoalId && s.status==='Completed' && s.accuracy!=null)
+    .sort((a,b)=>(a.conductedAt||'').localeCompare(b.conductedAt||''));
+  if(sessions.length<2) return '';
+
+  const goal=GOALS.find(g=>g.id==filterGoalId);
+  const max=Math.max(...sessions.map(s=>s.accuracy),1);
+
+  // trend: last session vs average of all previous
+  const last=sessions[sessions.length-1].accuracy;
+  const prev=sessions.slice(0,-1);
+  const prevAvg=Math.round(prev.reduce((s,x)=>s+x.accuracy,0)/prev.length);
+  const diff=last-prevAvg;
+  const trendIcon=diff>5?'&#8593;':diff<-5?'&#8595;':'&#8594;';
+  const trendColor=diff>5?'#2E7D32':diff<-5?'var(--crisis)':'#E65100';
+  const trendLabel=diff>5?'Improving':diff<-5?'Declining':'Stable';
+
+  const bars=sessions.map(s=>`
+    <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+      <div style="font-size:10px;font-weight:700;color:var(--gray-700)">${s.accuracy}%</div>
+      <div style="width:32px;background:var(--gray-200);border-radius:4px 4px 0 0;height:64px;display:flex;align-items:flex-end;overflow:hidden">
+        <div style="width:100%;background:var(--accent);border-radius:4px 4px 0 0;height:${Math.round(s.accuracy/max*100)}%;transition:height .4s ease"></div>
+      </div>
+      <div style="font-size:10px;color:var(--gray-500)">${(s.conductedAt||'').slice(5,10)}</div>
+    </div>`).join('');
+
+  return `
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Accuracy Trend${goal?` — ${goal.skillArea}`:''}</div>
+        ${goal&&goal.targetCriteria?`<div class="card-sub">Target: ${goal.targetCriteria}</div>`:''}
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:${trendColor}">
+        <span style="font-size:18px">${trendIcon}</span> ${trendLabel}
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:flex-end;padding:16px 20px;overflow-x:auto">${bars}</div>
+  </div>`;
+}
+
+function renderSessionsTable(filterGoalId){
+  let sessions=THERAPY_SESSIONS;
+  if(filterGoalId) sessions=sessions.filter(s=>s.goalId==filterGoalId);
+  if(therapyGoalFilter) sessions=sessions.filter(s=>s.childId==therapyGoalFilter);
+
+  const rows=sessions.map(s=>{
+    const acc=s.accuracy!=null?s.accuracy+'%':'—';
+    const planned=s.plannedAt?s.plannedAt.slice(0,10):'—';
+    return `<tr>
+      <td><strong>${s.childName}</strong></td>
+      <td><span class="prompt-badge">${s.goalSkillArea}</span></td>
+      <td style="font-size:12px">${planned}</td>
+      <td>${sessionStatusBadge(s.status)}</td>
+      <td style="font-size:12px">${s.conductedBy||'—'}</td>
+      <td style="font-size:13px;font-weight:700">${acc}</td>
+      <td style="font-size:12px">${s.promptLevel?`<span class="prompt-badge">${s.promptLevel}</span>`:'—'}</td>
+      <td><div style="display:flex;gap:6px">${s.status==='Planned'
+        ?`<button class="btn-primary" style="width:auto;padding:6px 12px;font-size:12px;margin-top:0" onclick="openCompleteSessionModal(${s.id})">Complete</button>
+           <button class="btn-outline" style="font-size:12px;padding:6px 10px;color:var(--crisis);border-color:var(--crisis)" onclick="cancelSession(${s.id})">Cancel</button>`
+        :`<span style="color:var(--gray-500);font-size:12px">${s.status}</span>`
+      }</div></td>
+    </tr>`;
+  }).join('');
+
+  const childOpts=`<option value="">All Children</option>`+CHILDREN.map(c=>`<option value="${c.id}"${therapyGoalFilter==c.id?' selected':''}>${c.name}</option>`).join('');
+
+  return `
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+    <select style="padding:8px 12px;font-size:13px;border:1.5px solid var(--gray-300);border-radius:8px;width:auto" onchange="therapyGoalFilter=this.value;renderTherapyBody()">${childOpts}</select>
+    <button class="btn-accent" onclick="openPlanSessionModal()">&#43; Plan Session</button>
+  </div>
+  ${renderAccuracyTrend(filterGoalId)}
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Child</th><th>Skill Area</th><th>Planned Date</th><th>Status</th><th>Conducted By</th><th>Accuracy</th><th>Prompt Level</th><th></th></tr></thead>
+        <tbody>${rows||'<tr><td colspan="8" style="padding:16px;color:var(--gray-500);text-align:center">No sessions yet — plan one from the Goals tab</td></tr>'}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function viewGoalSessions(goalId){
+  therapySubTab='sessions';
+  document.querySelectorAll('.therapy-tab-btn').forEach((b,i)=>b.classList.toggle('active',i===1));
+  const body=document.getElementById('therapy-body');
+  if(body) body.innerHTML=renderSessionsTable(goalId);
+}
+
+async function loadTherapyData(){
+  try{
+    const [gr,sr]=await Promise.all([fetch('/api/goals'),fetch('/api/therapy-sessions')]);
+    GOALS=await gr.json();
+    THERAPY_SESSIONS=await sr.json();
+  }catch(e){GOALS=[];THERAPY_SESSIONS=[];}
+  renderTherapyBody();
+}
+
+function openGoalModal(id){
+  const g=id?GOALS.find(x=>x.id===id):null;
+  const childOpts=CHILDREN.map(c=>`<option value="${c.id}"${g&&g.childId===c.id?' selected':''}>${c.name}</option>`).join('')||'<option value="">No children added yet</option>';
+  const staffOpts=`<option value="">— None —</option>`+STAFF.map(s=>`<option value="${s.id}"${g&&g.createdById===s.id?' selected':''}>${s.name}</option>`).join('');
+  const skillOpts=CONFIG.therapy_skill_areas.map(a=>`<option${g&&g.skillArea===a?' selected':''}>${a}</option>`).join('');
+  const statusOpts=CONFIG.goal_statuses.map(s=>`<option${g&&g.status===s?' selected':''}>${s}</option>`).join('');
+  const overlay=document.getElementById('overlay');
+  overlay.style.display='flex';overlay.className='overlay';
+  overlay.innerHTML=`<div class="modal">
+    <div class="modal-hdr"><div class="modal-title">${g?'Edit Goal':'Add Goal'}</div>
+      <button class="modal-close" onclick="closeOverlay()">&#10005;</button></div>
+    <div class="form-group" style="margin-bottom:12px"><label>Child *</label><select id="mg-child">${childOpts}</select></div>
+    <div class="form-group" style="margin-bottom:12px"><label>Skill Area *</label><select id="mg-skill">${skillOpts}</select></div>
+    <div class="form-group" style="margin-bottom:12px"><label>Description *</label>
+      <textarea id="mg-desc" rows="3" placeholder="Describe the clinical objective…">${g?g.description:''}</textarea></div>
+    <div class="form-group" style="margin-bottom:12px"><label>Target Criteria</label>
+      <input type="text" id="mg-criteria" value="${g?g.targetCriteria||'':''}" placeholder="e.g. 80% accuracy over 3 consecutive sessions"></div>
+    <div class="form-group" style="margin-bottom:12px"><label>Created By (Supervisor)</label><select id="mg-staff">${staffOpts}</select></div>
+    ${g?`<div class="form-group" style="margin-bottom:12px"><label>Status</label><select id="mg-status">${statusOpts}</select></div>`:''}
+    <div style="margin-top:18px;display:flex;gap:10px">
+      <button class="btn-outline" onclick="closeOverlay()">Cancel</button>
+      <button class="btn-primary" style="width:auto;padding:10px 24px" onclick="saveGoal(${g?g.id:'null'})">Save Goal</button>
+    </div></div>`;
+  overlay.onclick=function(e){if(e.target===overlay) closeOverlay();};
+}
+
+async function saveGoal(id){
+  const childId=parseInt(document.getElementById('mg-child').value)||null;
+  const skillArea=document.getElementById('mg-skill').value;
+  const description=document.getElementById('mg-desc').value.trim();
+  const targetCriteria=document.getElementById('mg-criteria').value.trim()||null;
+  const createdById=parseInt(document.getElementById('mg-staff').value)||null;
+  if(!childId){alert('Please select a child.');return;}
+  if(!description){alert('Please enter a description.');return;}
+  const payload={childId,skillArea,description,targetCriteria,createdById};
+  if(id){
+    const statusEl=document.getElementById('mg-status');
+    if(statusEl) payload.status=statusEl.value;
+  }
+  const url=id?`/api/goals/${id}`:'/api/goals';
+  const method=id?'PUT':'POST';
+  try{
+    const res=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(!res.ok){const e=await res.json().catch(()=>({}));alert(e.error||('HTTP '+res.status));return;}
+    const saved=await res.json();
+    if(id){const i=GOALS.findIndex(x=>x.id===id);if(i>=0)GOALS[i]=saved;}else GOALS.push(saved);
+    closeOverlay();showToast('Goal saved');renderTherapyBody();
+  }catch(err){alert('Network error: '+err.message);}
+}
+
+function openPlanSessionModal(){
+  const childOpts=CHILDREN.map(c=>`<option value="${c.id}">${c.name}</option>`).join('')||'<option value="">No children yet</option>';
+  const staffOpts=`<option value="">— None —</option>`+STAFF.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  const now=new Date();
+  const todayISO=now.toISOString().slice(0,16);
+  const overlay=document.getElementById('overlay');
+  overlay.style.display='flex';overlay.className='overlay';
+  overlay.innerHTML=`<div class="modal">
+    <div class="modal-hdr"><div class="modal-title">Plan Session</div>
+      <button class="modal-close" onclick="closeOverlay()">&#10005;</button></div>
+    <div class="form-group" style="margin-bottom:12px"><label>Child *</label>
+      <select id="ps-child" onchange="loadGoalsForChild()">${childOpts}</select></div>
+    <div class="form-group" style="margin-bottom:12px"><label>Goal *</label>
+      <select id="ps-goal"><option value="">— Select child first —</option></select></div>
+    <div class="form-group" style="margin-bottom:12px"><label>Planned Date &amp; Time</label>
+      <input type="datetime-local" id="ps-date" value="${todayISO}"></div>
+    <div class="form-group" style="margin-bottom:12px"><label>Planned By (Supervisor)</label>
+      <select id="ps-staff">${staffOpts}</select></div>
+    <div style="margin-top:18px;display:flex;gap:10px">
+      <button class="btn-outline" onclick="closeOverlay()">Cancel</button>
+      <button class="btn-primary" style="width:auto;padding:10px 24px" onclick="savePlanSession()">Plan Session</button>
+    </div></div>`;
+  overlay.onclick=function(e){if(e.target===overlay) closeOverlay();};
+  loadGoalsForChild();
+}
+
+function loadGoalsForChild(){
+  const childId=parseInt(document.getElementById('ps-child').value)||null;
+  const goalSel=document.getElementById('ps-goal');
+  if(!goalSel) return;
+  const childGoals=GOALS.filter(g=>g.childId===childId&&g.status==='Active');
+  goalSel.innerHTML=childGoals.length
+    ?childGoals.map(g=>`<option value="${g.id}">${g.skillArea} — ${g.description.slice(0,40)}…</option>`).join('')
+    :'<option value="">No active goals for this child</option>';
+}
+
+async function savePlanSession(){
+  const childId=parseInt(document.getElementById('ps-child').value)||null;
+  const goalId=parseInt(document.getElementById('ps-goal').value)||null;
+  const plannedAt=document.getElementById('ps-date').value||null;
+  const plannedById=parseInt(document.getElementById('ps-staff').value)||null;
+  if(!childId){alert('Please select a child.');return;}
+  if(!goalId){alert('Please select a goal.');return;}
+  try{
+    const res=await fetch('/api/therapy-sessions',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({childId,goalId,plannedAt,plannedById})});
+    if(!res.ok){const e=await res.json().catch(()=>({}));alert(e.error||('HTTP '+res.status));return;}
+    const saved=await res.json();
+    THERAPY_SESSIONS.push(saved);
+    closeOverlay();showToast('Session planned');renderTherapyBody();
+  }catch(err){alert('Network error: '+err.message);}
+}
+
+function openCompleteSessionModal(id){
+  const s=THERAPY_SESSIONS.find(x=>x.id===id);
+  if(!s) return;
+  const staffOpts=`<option value="">— None —</option>`+STAFF.map(st=>`<option value="${st.id}">${st.name}</option>`).join('');
+  const promptOpts=CONFIG.prompt_levels.map(p=>`<option>${p}</option>`).join('');
+  const now=new Date().toISOString().slice(0,16);
+  const sessionDate=(s.plannedAt||now).slice(0,10);
+  const sameDayInc=INCIDENTS.filter(inc=>
+    inc.childId===s.childId && inc.date===sessionDate
+  );
+  const highCount=sameDayInc.filter(inc=>inc.severity==='High').length;
+  const incidentsBanner=sameDayInc.length
+    ?`<div style="background:#FFF8E1;border:1px solid #FFD54F;border-radius:8px;padding:10px 14px;font-size:13px;color:#E65100;display:flex;gap:8px;align-items:flex-start;margin-bottom:14px">
+        <span style="font-size:16px">&#9888;</span>
+        <div><strong>${sameDayInc.length} incident${sameDayInc.length!==1?'s':''} recorded on ${fmtDate(sessionDate)}</strong>${highCount?` &nbsp;&middot;&nbsp; <span style="color:var(--crisis);font-weight:700">${highCount} High severity</span>`:''}<br>
+        <span style="font-size:12px;opacity:.8">Consider whether this affects session reliability.</span></div>
+      </div>`
+    :'';
+  const overlay=document.getElementById('overlay');
+  overlay.style.display='flex';overlay.className='overlay';
+  overlay.innerHTML=`<div class="modal">
+    <div class="modal-hdr"><div class="modal-title">Complete Session</div>
+      <button class="modal-close" onclick="closeOverlay()">&#10005;</button></div>
+    <div style="background:var(--gray-100);border-radius:8px;padding:12px;font-size:13px;margin-bottom:16px">
+      <strong>${s.childName}</strong> &middot; <span class="prompt-badge">${s.goalSkillArea}</span>
+      ${s.plannedAt?` &middot; Planned: ${s.plannedAt.slice(0,10)}`:''}
+    </div>
+    ${incidentsBanner}
+    <div class="form-group" style="margin-bottom:12px"><label>Conducted By *</label>
+      <select id="cs-staff">${staffOpts}</select></div>
+    <div class="form-group" style="margin-bottom:12px"><label>Date &amp; Time Conducted</label>
+      <input type="datetime-local" id="cs-date" value="${now}"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="form-group"><label>Total Trials</label>
+        <input type="number" id="cs-total" min="1" placeholder="e.g. 10"></div>
+      <div class="form-group"><label>Correct Trials</label>
+        <input type="number" id="cs-correct" min="0" placeholder="e.g. 8"></div>
+    </div>
+    <div class="form-group" style="margin-bottom:12px"><label>Prompt Level</label>
+      <select id="cs-prompt"><option value="">— Select —</option>${promptOpts}</select></div>
+    <div class="form-group" style="margin-bottom:12px"><label>Notes</label>
+      <textarea id="cs-notes" rows="3" placeholder="How did the session go? Any observations…"></textarea></div>
+    <div style="margin-top:18px;display:flex;gap:10px">
+      <button class="btn-outline" onclick="closeOverlay()">Cancel</button>
+      <button class="btn-primary" style="width:auto;padding:10px 24px" onclick="completeSession(${id})">Mark as Completed</button>
+    </div></div>`;
+  overlay.onclick=function(e){if(e.target===overlay) closeOverlay();};
+}
+
+async function completeSession(id){
+  const conductedById=parseInt(document.getElementById('cs-staff').value)||null;
+  const conductedAt=document.getElementById('cs-date').value||null;
+  const totalTrials=parseInt(document.getElementById('cs-total').value)||null;
+  const correctTrials=parseInt(document.getElementById('cs-correct').value)||null;
+  const promptLevel=document.getElementById('cs-prompt').value||null;
+  const notes=document.getElementById('cs-notes').value.trim()||null;
+  if(totalTrials&&correctTrials>totalTrials){alert('Correct trials cannot exceed total trials.');return;}
+  try{
+    const res=await fetch(`/api/therapy-sessions/${id}`,{method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({status:'Completed',conductedById,conductedAt,totalTrials,correctTrials,promptLevel,notes})});
+    if(!res.ok){const e=await res.json().catch(()=>({}));alert(e.error||('HTTP '+res.status));return;}
+    const saved=await res.json();
+    const i=THERAPY_SESSIONS.findIndex(x=>x.id===id);
+    if(i>=0) THERAPY_SESSIONS[i]=saved;
+    closeOverlay();showToast('Session completed');renderTherapyBody();
+  }catch(err){alert('Network error: '+err.message);}
+}
+
+async function cancelSession(id){
+  if(!confirm('Cancel this planned session? This cannot be undone.')) return;
+  try{
+    const res=await fetch(`/api/therapy-sessions/${id}`,{method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({status:'Cancelled'})});
+    if(!res.ok){const e=await res.json().catch(()=>({}));alert(e.error||('HTTP '+res.status));return;}
+    const saved=await res.json();
+    const i=THERAPY_SESSIONS.findIndex(x=>x.id===id);
+    if(i>=0) THERAPY_SESSIONS[i]=saved;
+    showToast('Session cancelled');
+    renderTherapyBody();
+  }catch(err){alert('Network error: '+err.message);}
 }
 
 // ─── INIT ────────────────────────────────────────────────────────────────────

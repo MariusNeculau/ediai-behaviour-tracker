@@ -6,7 +6,7 @@ Randarea PDF (render_child_report_pdf) folosește ReportLab Platypus.
 """
 
 from collections import Counter
-from datetime import timedelta
+from datetime import datetime, timedelta
 from io import BytesIO
 
 
@@ -115,8 +115,12 @@ def _aggregate(incidents, window_days):
     }
 
 
-def build_child_report(child, incidents, period, today):
-    """View-model pur (dict) pentru raportul unui copil. `school` e completat de endpoint."""
+def build_child_report(child, incidents, period, today, goals=None):
+    """View-model pur (dict) pentru raportul unui copil. `school` e completat de endpoint.
+
+    `goals` — listă opțională de TherapyGoal pentru copil; când e furnizată,
+    raportul include o secțiune Therapy Progress cu sesiunile din fereastră.
+    """
     window_days = _WINDOW_DAYS[period]
     start = today - timedelta(days=window_days - 1)
     agg = _aggregate(incidents, window_days)
@@ -133,6 +137,32 @@ def build_child_report(child, incidents, period, today):
     ]
     age = child.age if child.age is not None else "—"
 
+    therapy = []
+    if goals:
+        start_dt = datetime.combine(start, datetime.min.time())
+        for g in goals:
+            completed = [
+                s for s in g.sessions
+                if s.status == "Completed"
+                and s.conducted_at is not None
+                and s.conducted_at >= start_dt
+            ]
+            if not completed:
+                continue
+            accuracies = [
+                round(s.correct_trials / s.total_trials * 100)
+                for s in completed
+                if s.total_trials and s.correct_trials is not None
+            ]
+            therapy.append({
+                "skill_area": g.skill_area,
+                "description": g.description,
+                "target_criteria": g.target_criteria or "—",
+                "status": g.status,
+                "sessions_count": len(completed),
+                "avg_accuracy": round(sum(accuracies) / len(accuracies)) if accuracies else None,
+            })
+
     return {
         "report_type": "child",
         "school": "",
@@ -145,6 +175,7 @@ def build_child_report(child, incidents, period, today):
         "period_range": f"{start.strftime('%d %b %Y')} – {today.strftime('%d %b %Y')}",
         "generated_on": today.strftime("%d %b %Y"),
         "incident_rows": rows,
+        "therapy": therapy,
         **agg,
     }
 
@@ -446,6 +477,39 @@ def render_report_pdf(report):
         ]))
         story.append(Spacer(1, 6))
         story.append(pa_tbl)
+
+    # 6. Therapy Progress (child report only, when therapy data is present)
+    therapy = report.get("therapy") or []
+    if rtype == "child" and therapy:
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("Therapy Progress", h2))
+        th_data = [["Skill Area", "Sessions", "Avg Accuracy", "Status", "Target Criteria"]]
+        for t in therapy:
+            acc = f"{t['avg_accuracy']}%" if t["avg_accuracy"] is not None else "—"
+            th_data.append([
+                t["skill_area"],
+                str(t["sessions_count"]),
+                acc,
+                t["status"],
+                t["target_criteria"],
+            ])
+        th_tbl = Table(th_data, colWidths=[38 * mm, 22 * mm, 26 * mm, 22 * mm, 66 * mm],
+                       repeatRows=1)
+        th_tbl.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), head_bg),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+            ("FONTSIZE", (0, 0), (-1, -1), 10),
+            ("ALIGN", (1, 0), (2, -1), "CENTER"),
+            ("ALIGN", (0, 0), (0, -1), "LEFT"),
+            ("INNERGRID", (0, 0), (-1, -1), 0.5, grey_grid),
+            ("BOX", (0, 0), (-1, -1), 1.0, box_border),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.append(th_tbl)
 
     doc.build(story, canvasmaker=NumberedCanvas)
     return buffer.getvalue()
