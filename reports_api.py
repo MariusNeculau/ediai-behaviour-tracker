@@ -57,7 +57,19 @@ def child_report(child_id):
     )
 
     goals = TherapyGoal.query.filter_by(child_id=child_id).all()
-    report = build_child_report(child, incidents, period, today, goals=goals)
+    seizure_incidents = (
+        Incident.query
+        .filter(
+            Incident.child_id == child_id,
+            Incident.subtype == "Epileptic Seizure",
+            Incident.occurred_at >= start_dt,
+            Incident.occurred_at < end_dt,
+        )
+        .order_by(Incident.occurred_at.desc())
+        .all()
+    )
+    report = build_child_report(child, incidents, period, today,
+                                 goals=goals, seizure_incidents=seizure_incidents)
     sc = serialize_system_config(SystemConfig.query.first())
     report["school"] = sc["name"]
     report["school_roll"] = sc["roll_number"]

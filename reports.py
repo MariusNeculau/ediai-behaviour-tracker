@@ -115,11 +115,13 @@ def _aggregate(incidents, window_days):
     }
 
 
-def build_child_report(child, incidents, period, today, goals=None):
+def build_child_report(child, incidents, period, today, goals=None,
+                        seizure_incidents=None):
     """View-model pur (dict) pentru raportul unui copil. `school` e completat de endpoint.
 
-    `goals` — listă opțională de TherapyGoal pentru copil; când e furnizată,
-    raportul include o secțiune Therapy Progress cu sesiunile din fereastră.
+    `goals` — TherapyGoal objects; adds Therapy Progress section.
+    `seizure_incidents` — Incident objects with subtype="Epileptic Seizure"; adds
+    Seizure History section.
     """
     window_days = _WINDOW_DAYS[period]
     start = today - timedelta(days=window_days - 1)
@@ -163,6 +165,20 @@ def build_child_report(child, incidents, period, today, goals=None):
                 "avg_accuracy": round(sum(accuracies) / len(accuracies)) if accuracies else None,
             })
 
+    seizures = []
+    if seizure_incidents:
+        for i in seizure_incidents:
+            sd = i.seizure_detail
+            seizures.append({
+                "date": i.occurred_at.strftime("%d %b %Y %H:%M"),
+                "seizure_type": (sd.seizure_type or "—") if sd else "—",
+                "duration_seconds": sd.duration_seconds if sd else None,
+                "position": (sd.position_during or "—") if sd else "—",
+                "protocol_followed": bool(sd.protocol_followed) if sd else False,
+                "emergency_called": bool(sd.emergency_services_called) if sd else False,
+                "medication": sd.medication_name if (sd and sd.medication_administered) else "—",
+            })
+
     return {
         "report_type": "child",
         "school": "",
@@ -176,6 +192,7 @@ def build_child_report(child, incidents, period, today, goals=None):
         "generated_on": today.strftime("%d %b %Y"),
         "incident_rows": rows,
         "therapy": therapy,
+        "seizures": seizures,
         **agg,
     }
 
@@ -510,6 +527,52 @@ def render_report_pdf(report):
             ("RIGHTPADDING", (0, 0), (-1, -1), 6),
         ]))
         story.append(th_tbl)
+
+    # 7. Seizure History (child report only, when seizure data is present)
+    seizures = report.get("seizures") or []
+    if rtype == "child" and seizures:
+        story.append(Spacer(1, 12))
+        story.append(Paragraph("Seizure History", h2))
+        crisis_red = colors.HexColor("#C62828")
+        sz_data = [["Date & Time", "Type", "Duration", "Position",
+                    "Protocol", "Emergency", "Medication"]]
+        for s in seizures:
+            dur = f"{s['duration_seconds']}s" if s["duration_seconds"] else "—"
+            proto = "Yes" if s["protocol_followed"] else "No"
+            emg = "Yes" if s["emergency_called"] else "No"
+            sz_data.append([
+                s["date"], s["seizure_type"], dur, s["position"],
+                proto, emg, s["medication"],
+            ])
+        sz_tbl = Table(
+            sz_data,
+            colWidths=[30 * mm, 28 * mm, 20 * mm, 24 * mm, 20 * mm, 22 * mm, 30 * mm],
+            repeatRows=1,
+        )
+        sz_style = [
+            ("BACKGROUND", (0, 0), (-1, 0), head_bg),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("ALIGN", (2, 0), (5, -1), "CENTER"),
+            ("INNERGRID", (0, 0), (-1, -1), 0.5, grey_grid),
+            ("BOX", (0, 0), (-1, -1), 1.0, box_border),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ]
+        # Highlight rows: red text for Emergency=Yes, orange for Protocol=No
+        for row_idx, s in enumerate(seizures, start=1):
+            if s["emergency_called"]:
+                sz_style.append(("TEXTCOLOR", (5, row_idx), (5, row_idx), crisis_red))
+                sz_style.append(("FONTNAME", (5, row_idx), (5, row_idx), "Helvetica-Bold"))
+            if not s["protocol_followed"]:
+                sz_style.append(("TEXTCOLOR", (4, row_idx), (4, row_idx),
+                                  colors.HexColor("#E65100")))
+                sz_style.append(("FONTNAME", (4, row_idx), (4, row_idx), "Helvetica-Bold"))
+        sz_tbl.setStyle(TableStyle(sz_style))
+        story.append(sz_tbl)
 
     doc.build(story, canvasmaker=NumberedCanvas)
     return buffer.getvalue()

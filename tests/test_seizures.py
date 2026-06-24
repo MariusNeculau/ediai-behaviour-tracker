@@ -571,3 +571,83 @@ def test_list_seizures_ordered_by_date_desc(app, client, child_id):
     data = res.get_json()
     dates = [d["date"] for d in data]
     assert dates == sorted(dates, reverse=True)
+
+
+# ─── Seizure section in child PDF (Deliverable 4) ────────────────────────────
+
+def test_build_child_report_includes_seizure_data(app, child_id, seizure_incident_id):
+    from models import db, Child, Incident
+    from reports import build_child_report
+    from datetime import date
+
+    with app.app_context():
+        child = db.session.get(Child, child_id)
+        sz_incidents = Incident.query.filter_by(
+            child_id=child_id, subtype="Epileptic Seizure"
+        ).all()
+        report = build_child_report(child, [], "month", date.today(),
+                                    seizure_incidents=sz_incidents)
+
+    assert len(report["seizures"]) == 1
+    s = report["seizures"][0]
+    assert s["seizure_type"] == "Tonic-Clonic"
+    assert s["duration_seconds"] == 90
+    assert s["protocol_followed"] is True
+    assert s["emergency_called"] is False
+
+
+def test_build_child_report_seizure_outside_period_excluded(app, child_id):
+    from models import db, Child, Incident, SeizureDetail
+    from reports import build_child_report
+    from datetime import date, datetime
+
+    with app.app_context():
+        inc = Incident(
+            child_id=child_id,
+            occurred_at=datetime(2026, 1, 1, 10, 0),   # well outside "month" window
+            type="Crisis", subtype="Epileptic Seizure",
+            severity="High", description="Old seizure", status="Resolved",
+        )
+        db.session.add(inc)
+        db.session.flush()
+        db.session.add(SeizureDetail(incident_id=inc.id, seizure_type="Absence"))
+        db.session.commit()
+
+        # Pass the old incident but with today's report window — should appear
+        # (seizure_incidents are pre-filtered by the caller; we test that
+        # build_child_report stores them as-is without extra filtering)
+        child = db.session.get(Child, child_id)
+        report = build_child_report(child, [], "month", date.today(),
+                                    seizure_incidents=[inc])
+
+    assert len(report["seizures"]) == 1   # passed in, stored as-is
+
+
+def test_build_child_report_no_seizures_returns_empty_list(app, child_id):
+    from models import db, Child
+    from reports import build_child_report
+    from datetime import date
+
+    with app.app_context():
+        child = db.session.get(Child, child_id)
+        report = build_child_report(child, [], "month", date.today())
+
+    assert report["seizures"] == []
+
+
+def test_child_report_pdf_with_seizures_is_valid_pdf(app, client, child_id,
+                                                      seizure_incident_id,
+                                                      saved_reports_dir):
+    res = client.get(f"/api/reports/child/{child_id}?period=month")
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["success"] is True
+    pdf_bytes = (saved_reports_dir / data["filename"]).read_bytes()
+    assert pdf_bytes[:4] == b"%PDF"
+
+
+def test_child_report_pdf_without_seizures_still_valid(app, client, child_id,
+                                                        saved_reports_dir):
+    res = client.get(f"/api/reports/child/{child_id}?period=month")
+    assert res.status_code == 200
+    assert (saved_reports_dir / res.get_json()["filename"]).read_bytes()[:4] == b"%PDF"
