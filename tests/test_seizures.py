@@ -292,3 +292,200 @@ def test_update_seizure_detail_empty_string_clears_field(client, seizure_inciden
     )
     assert res.status_code == 200
     assert res.get_json()["seizureType"] is None
+
+
+# ─── GET /api/children/<id>/seizure-summary (Deliverable 2) ──────────────────
+
+def test_seizure_summary_unknown_child_returns_404(client):
+    res = client.get("/api/children/99999/seizure-summary")
+    assert res.status_code == 404
+
+
+def test_seizure_summary_empty_for_child_with_no_seizures(client, child_id):
+    res = client.get(f"/api/children/{child_id}/seizure-summary")
+    assert res.status_code == 200
+    data = res.get_json()
+    assert data["count"] == 0
+    assert data["incidents"] == []
+
+
+def test_seizure_summary_count_and_last_date(client, child_id, seizure_incident_id):
+    res = client.get(f"/api/children/{child_id}/seizure-summary")
+    data = res.get_json()
+    assert data["count"] == 1
+    assert data["lastDate"] == "20 Jun 2026"
+
+
+def test_seizure_summary_most_common_type(client, child_id, seizure_incident_id):
+    res = client.get(f"/api/children/{child_id}/seizure-summary")
+    data = res.get_json()
+    assert data["mostCommonType"] == "Tonic-Clonic"
+
+
+def test_seizure_summary_avg_duration(client, child_id, seizure_incident_id):
+    res = client.get(f"/api/children/{child_id}/seizure-summary")
+    data = res.get_json()
+    assert data["avgDurationSeconds"] == 90
+
+
+def test_seizure_summary_protocol_compliance_full(client, child_id, seizure_incident_id):
+    # Fixture has protocol_followed=True — 1/1 = 100%
+    res = client.get(f"/api/children/{child_id}/seizure-summary")
+    data = res.get_json()
+    assert data["protocolComplianceRate"] == 100
+
+
+def test_seizure_summary_protocol_compliance_partial(app, client, child_id,
+                                                       seizure_incident_id):
+    from models import db, Incident, SeizureDetail
+    from datetime import datetime
+
+    with app.app_context():
+        inc = Incident(
+            child_id=child_id,
+            occurred_at=datetime(2026, 6, 21, 11, 0),
+            type="Crisis",
+            subtype="Epileptic Seizure",
+            severity="High",
+            description="Second seizure",
+            status="Resolved",
+        )
+        db.session.add(inc)
+        db.session.flush()
+        db.session.add(SeizureDetail(
+            incident_id=inc.id,
+            seizure_type="Absence",
+            duration_seconds=20,
+            protocol_followed=False,   # not followed
+        ))
+        db.session.commit()
+
+    res = client.get(f"/api/children/{child_id}/seizure-summary")
+    data = res.get_json()
+    assert data["count"] == 2
+    assert data["protocolComplianceRate"] == 50   # 1 of 2
+
+
+def test_seizure_summary_incidents_capped_at_five(app, client, child_id):
+    from models import db, Incident
+    from datetime import datetime
+
+    with app.app_context():
+        for i in range(7):
+            inc = Incident(
+                child_id=child_id,
+                occurred_at=datetime(2026, 6, i + 1, 10, 0),
+                type="Crisis",
+                subtype="Epileptic Seizure",
+                severity="High",
+                description=f"Seizure {i}",
+                status="Resolved",
+            )
+            db.session.add(inc)
+        db.session.commit()
+
+    res = client.get(f"/api/children/{child_id}/seizure-summary")
+    data = res.get_json()
+    assert data["count"] == 7
+    assert len(data["incidents"]) == 5
+
+
+def test_seizure_summary_incident_fields(client, child_id, seizure_incident_id):
+    res = client.get(f"/api/children/{child_id}/seizure-summary")
+    inc = res.get_json()["incidents"][0]
+    assert inc["id"] == seizure_incident_id
+    assert inc["seizureType"] == "Tonic-Clonic"
+    assert inc["durationSeconds"] == 90
+    assert inc["positionDuring"] == "Floor"
+    assert inc["protocolFollowed"] is True
+    assert inc["emergencyServicesCalled"] is False
+
+
+def test_seizure_summary_excludes_non_epileptic_incidents(app, client, child_id,
+                                                            non_seizure_incident_id,
+                                                            seizure_incident_id):
+    res = client.get(f"/api/children/{child_id}/seizure-summary")
+    data = res.get_json()
+    assert data["count"] == 1   # only the seizure incident, not the behavioural one
+
+
+# ─── typeDistribution (chart data) ───────────────────────────────────────────
+
+def test_seizure_summary_type_distribution_present(client, child_id, seizure_incident_id):
+    res = client.get(f"/api/children/{child_id}/seizure-summary")
+    data = res.get_json()
+    assert "typeDistribution" in data
+    assert len(data["typeDistribution"]) == 1
+    entry = data["typeDistribution"][0]
+    assert entry["type"] == "Tonic-Clonic"
+    assert entry["count"] == 1
+    assert entry["pct"] == 100
+
+
+def test_seizure_summary_type_distribution_sorted_by_count(app, client, child_id,
+                                                             seizure_incident_id):
+    from models import db, Incident, SeizureDetail
+    from datetime import datetime
+
+    with app.app_context():
+        for seizure_type in ["Absence", "Absence", "Focal"]:
+            inc = Incident(
+                child_id=child_id,
+                occurred_at=datetime(2026, 6, 22, 10, 0),
+                type="Crisis", subtype="Epileptic Seizure",
+                severity="High", description="test", status="Resolved",
+            )
+            db.session.add(inc)
+            db.session.flush()
+            db.session.add(SeizureDetail(incident_id=inc.id, seizure_type=seizure_type))
+        db.session.commit()
+
+    res = client.get(f"/api/children/{child_id}/seizure-summary")
+    dist = res.get_json()["typeDistribution"]
+    # Absence (2) should come before Focal (1) and Tonic-Clonic (1)
+    assert dist[0]["type"] == "Absence"
+    assert dist[0]["count"] == 2
+
+
+def test_seizure_summary_type_distribution_pct_sums_to_100(app, client, child_id):
+    from models import db, Incident, SeizureDetail
+    from datetime import datetime
+
+    with app.app_context():
+        for t in ["Tonic-Clonic", "Tonic-Clonic", "Absence", "Focal"]:
+            inc = Incident(
+                child_id=child_id,
+                occurred_at=datetime(2026, 6, 22, 10, 0),
+                type="Crisis", subtype="Epileptic Seizure",
+                severity="High", description="test", status="Resolved",
+            )
+            db.session.add(inc)
+            db.session.flush()
+            db.session.add(SeizureDetail(incident_id=inc.id, seizure_type=t))
+        db.session.commit()
+
+    res = client.get(f"/api/children/{child_id}/seizure-summary")
+    dist = res.get_json()["typeDistribution"]
+    total_pct = sum(d["pct"] for d in dist)
+    # Rounding may cause 99-101; check within tolerance
+    assert 98 <= total_pct <= 102
+
+
+def test_seizure_summary_type_distribution_empty_when_no_detail(app, client, child_id):
+    from models import db, Incident
+    from datetime import datetime
+
+    with app.app_context():
+        inc = Incident(
+            child_id=child_id,
+            occurred_at=datetime(2026, 6, 22, 10, 0),
+            type="Crisis", subtype="Epileptic Seizure",
+            severity="High", description="no detail", status="Resolved",
+        )
+        db.session.add(inc)
+        db.session.commit()
+
+    res = client.get(f"/api/children/{child_id}/seizure-summary")
+    data = res.get_json()
+    # incident without SeizureDetail → no type to count
+    assert data["typeDistribution"] == []

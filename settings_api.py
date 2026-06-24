@@ -6,10 +6,12 @@ Deletion is soft (active=False). Archiving an entity that is still in use
 refused with HTTP 409 and an actionable message.
 """
 
+from collections import Counter
+
 from flask import Blueprint, jsonify, request
 
 import config
-from models import db, Child, Staff, Room, SystemConfig, TherapyGoal, TherapySession
+from models import db, Child, Staff, Room, SystemConfig, TherapyGoal, TherapySession, Incident
 from serializers import (
     serialize_room, serialize_staff, serialize_child, serialize_system_config,
     serialize_goal, serialize_therapy_session,
@@ -195,6 +197,72 @@ def delete_child(child_id):
     child.active = False
     db.session.commit()
     return jsonify(serialize_child(child))
+
+
+# ─── Child seizure summary ──────────────────────────────────────────────────
+
+def _serialize_seizure_incident(i):
+    dt = i.occurred_at
+    sd = i.seizure_detail
+    return {
+        "id": i.id,
+        "date": dt.strftime("%d %b %Y") if dt else "",
+        "time": dt.strftime("%H:%M") if dt else "",
+        "seizureType": sd.seizure_type if sd else None,
+        "durationSeconds": sd.duration_seconds if sd else None,
+        "positionDuring": sd.position_during if sd else None,
+        "protocolFollowed": bool(sd.protocol_followed) if sd else False,
+        "emergencyServicesCalled": bool(sd.emergency_services_called) if sd else False,
+        "medicationAdministered": bool(sd.medication_administered) if sd else False,
+        "medicationName": sd.medication_name if sd else None,
+        "staff": i.staff.name if i.staff else "",
+    }
+
+
+@settings_bp.route("/children/<int:child_id>/seizure-summary", methods=["GET"])
+def child_seizure_summary(child_id):
+    child = db.session.get(Child, child_id)
+    if child is None:
+        return jsonify({"error": "Unknown child"}), 404
+
+    seizure_incidents = (
+        Incident.query
+        .filter_by(child_id=child_id, subtype="Epileptic Seizure")
+        .order_by(Incident.occurred_at.desc())
+        .all()
+    )
+    if not seizure_incidents:
+        return jsonify({"count": 0, "incidents": []})
+
+    details = [i.seizure_detail for i in seizure_incidents if i.seizure_detail]
+    durations = [d.duration_seconds for d in details if d.duration_seconds]
+    avg_duration = round(sum(durations) / len(durations)) if durations else None
+    protocol_rate = (
+        round(sum(1 for d in details if d.protocol_followed) / len(details) * 100)
+        if details else None
+    )
+    type_counts = Counter(d.seizure_type for d in details if d.seizure_type)
+    most_common_type = type_counts.most_common(1)[0][0] if type_counts else None
+
+    total_typed = sum(type_counts.values())
+    type_distribution = [
+        {
+            "type": t,
+            "count": c,
+            "pct": round(c / total_typed * 100) if total_typed else 0,
+        }
+        for t, c in type_counts.most_common()
+    ]
+
+    return jsonify({
+        "count": len(seizure_incidents),
+        "lastDate": seizure_incidents[0].occurred_at.strftime("%d %b %Y"),
+        "avgDurationSeconds": avg_duration,
+        "protocolComplianceRate": protocol_rate,
+        "mostCommonType": most_common_type,
+        "typeDistribution": type_distribution,
+        "incidents": [_serialize_seizure_incident(i) for i in seizure_incidents[:5]],
+    })
 
 
 # ─── Child therapy summary ──────────────────────────────────────────────────

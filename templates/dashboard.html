@@ -816,6 +816,7 @@ function showChildDetail(id){
   void c.offsetWidth;
   c.innerHTML=renderChildDetail(id);
   loadChildTherapySummary(id);
+  loadChildSeizureSummary(id);
 }
 
 function renderChildDetail(id){
@@ -901,7 +902,8 @@ function renderChildDetail(id){
   </div>
   <div id="child-therapy-summary" style="margin-top:18px">
     <div style="color:var(--gray-500);font-size:13px;padding:6px 0">Loading therapy summary…</div>
-  </div>`;
+  </div>
+  <div id="child-seizure-summary" style="margin-top:18px"></div>`;
 }
 
 // ─── CHILD THERAPY SUMMARY ───────────────────────────────────────────────────
@@ -966,6 +968,114 @@ function renderTherapySummaryCard(data){
         </table>
       </div>
     </div>`:''}
+  </div>`;
+}
+
+// ─── CHILD SEIZURE SUMMARY ───────────────────────────────────────────────────
+async function loadChildSeizureSummary(childId){
+  const el=document.getElementById('child-seizure-summary');
+  if(!el) return;
+  try{
+    const res=await fetch(`/api/children/${childId}/seizure-summary`);
+    if(!res.ok){el.innerHTML='';return;}
+    const data=await res.json();
+    el.innerHTML=renderSeizureSummaryCard(data);
+  }catch(e){el.innerHTML='';}
+}
+
+function renderSeizureSummaryCard(data){
+  if(!data.count) return '';
+
+  // ── Protocol compliance ring (SVG) ──────────────────────────────────────
+  const rate = data.protocolComplianceRate != null ? data.protocolComplianceRate : 0;
+  const r = 32, circ = Math.round(2 * Math.PI * r);   // ≈ 201
+  const dash = Math.round(rate / 100 * circ);
+  const ringColor = rate >= 80 ? '#2E7D32' : rate >= 50 ? '#E65100' : 'var(--crisis)';
+  const protocolRing = `
+    <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+      <svg width="88" height="88" viewBox="0 0 88 88" style="overflow:visible">
+        <circle cx="44" cy="44" r="${r}" fill="none" stroke="var(--gray-200)" stroke-width="9"/>
+        <circle cx="44" cy="44" r="${r}" fill="none" stroke="${ringColor}" stroke-width="9"
+          stroke-dasharray="${dash} ${circ}" stroke-linecap="round"
+          transform="rotate(-90 44 44)"/>
+        <text x="44" y="49" text-anchor="middle" font-family="inherit"
+              font-size="15" font-weight="700" fill="${ringColor}">${data.protocolComplianceRate!=null?rate+'%':'—'}</text>
+      </svg>
+      <div style="font-size:11px;color:var(--gray-700);font-weight:600;text-align:center">Protocol<br>Compliance</div>
+    </div>`;
+
+  // ── Type distribution bar chart (SVG) ───────────────────────────────────
+  const dist = data.typeDistribution || [];
+  const barChart = dist.length ? (()=>{
+    const rowH = 28, labelW = 110, barMaxW = 160, countW = 32;
+    const svgH = dist.length * rowH + 8;
+    const bars = dist.map((t, i) => {
+      const y = i * rowH + 4;
+      const bw = Math.max(Math.round(t.pct / 100 * barMaxW), t.count > 0 ? 4 : 0);
+      const barColor = i === 0 ? 'var(--crisis)' : i === 1 ? '#E65100' : 'var(--accent)';
+      return `
+        <text x="${labelW - 6}" y="${y + 17}" text-anchor="end" font-size="12"
+              font-family="inherit" fill="var(--gray-700)">${t.type}</text>
+        <rect x="${labelW}" y="${y + 4}" width="${bw}" height="18" rx="3" fill="${barColor}" opacity="0.85"/>
+        <text x="${labelW + bw + 5}" y="${y + 17}" font-size="12"
+              font-family="inherit" fill="var(--gray-700)" font-weight="600">${t.count}</text>`;
+    }).join('');
+    return `
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-700);margin-bottom:6px">Type Distribution</div>
+        <svg width="${labelW + barMaxW + countW}" height="${svgH}" style="overflow:visible;display:block">
+          ${bars}
+        </svg>
+      </div>`;
+  })() : '';
+
+  // ── Key stats ────────────────────────────────────────────────────────────
+  const keyStats = [
+    ['Total', data.count],
+    ['Last', data.lastDate || '—'],
+    ['Avg Duration', data.avgDurationSeconds != null ? data.avgDurationSeconds + 's' : '—'],
+  ].map(([lbl, val]) => `
+    <div class="mini-stat" style="padding:12px 10px">
+      <div class="mini-val" style="font-size:18px;color:var(--crisis)">${val}</div>
+      <div class="mini-lbl">${lbl}</div>
+    </div>`).join('');
+
+  // ── Recent incidents table ───────────────────────────────────────────────
+  const rows = data.incidents.map(i => `<tr onclick="showIncidentModal(${i.id})" style="cursor:pointer">
+    <td style="font-size:12px"><strong>${i.date}</strong><br><span style="color:var(--gray-500)">${i.time}</span></td>
+    <td style="font-size:12px">${i.seizureType || '—'}</td>
+    <td style="font-size:12px">${i.durationSeconds != null ? i.durationSeconds + 's' : '—'}</td>
+    <td style="font-size:12px">${i.positionDuring || '—'}</td>
+    <td style="text-align:center">${i.protocolFollowed
+      ? '<span style="color:#2E7D32;font-weight:700">&#10003;</span>'
+      : '<span style="color:var(--crisis)">&#10007;</span>'}</td>
+    <td style="text-align:center">${i.emergencyServicesCalled
+      ? '<span style="color:var(--crisis);font-weight:700">Yes</span>'
+      : '<span style="color:var(--gray-500)">No</span>'}</td>
+    <td style="font-size:12px">${i.staff || '—'}</td>
+  </tr>`).join('');
+
+  return `
+  <div class="card" style="border-top:3px solid var(--crisis)">
+    <div class="card-header">
+      <div class="card-title" style="color:var(--crisis)">&#128148; Seizure History</div>
+      <div class="card-sub">${data.count} total seizure${data.count !== 1 ? 's' : ''} on record</div>
+    </div>
+    <div style="display:grid;grid-template-columns:auto 1fr auto;gap:24px;align-items:start;padding:16px 20px;border-bottom:1px solid var(--gray-200)">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">${keyStats}</div>
+      <div style="padding-top:4px">${barChart}</div>
+      <div style="padding-top:4px">${protocolRing}</div>
+    </div>
+    ${data.incidents.length ? `
+    <div style="padding:10px 18px 6px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-700);margin-bottom:8px">Recent Seizures</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Date & Time</th><th>Type</th><th>Duration</th><th>Position</th><th style="text-align:center">Protocol</th><th style="text-align:center">Emergency</th><th>Staff</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>` : ''}
   </div>`;
 }
 
