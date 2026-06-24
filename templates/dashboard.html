@@ -517,6 +517,63 @@ function renderDashboard(){
   </div>`;
 }
 
+// ─── SEIZURE FIELDS HELPER ────────────────────────────────────────────────────
+function renderSeizureFields(prefix, existing){
+  const ex=existing||{};
+  const selType=CONFIG.seizure_types.map(t=>`<option${ex.seizureType===t?' selected':''}>${t}</option>`).join('');
+  const selPos=CONFIG.seizure_positions.map(p=>`<option${ex.positionDuring===p?' selected':''}>${p}</option>`).join('');
+  const chkEmg=ex.emergencyServicesCalled?'checked':'';
+  const chkPro=ex.protocolFollowed?'checked':'';
+  const chkMed=ex.medicationAdministered?'checked':'';
+  const onMed=ex.medicationAdministered;
+  return `
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="${prefix}-type">Seizure Type</label>
+        <select id="${prefix}-type">
+          <option value="">— Select —</option>${selType}
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="${prefix}-position">Position During Seizure</label>
+        <select id="${prefix}-position">
+          <option value="">— Select —</option>${selPos}
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="${prefix}-duration">Duration (seconds)</label>
+        <input type="number" id="${prefix}-duration" min="1" max="600" placeholder="e.g. 90" value="${ex.durationSeconds||''}">
+      </div>
+      <div class="form-group">
+        <label for="${prefix}-recovery">Recovery Time (minutes)</label>
+        <input type="number" id="${prefix}-recovery" min="0" max="120" placeholder="e.g. 15" value="${ex.recoveryTimeMinutes||''}">
+      </div>
+      <div class="form-group full" style="display:flex;gap:16px;flex-wrap:wrap">
+        <label class="toggle-check${ex.emergencyServicesCalled?' on':''}" id="tc-${prefix}-emergency"
+               onclick="toggleCheck('tc-${prefix}-emergency','${prefix}-emergency')">
+          <input type="checkbox" id="${prefix}-emergency" ${chkEmg}> Emergency Services Called
+        </label>
+        <label class="toggle-check${ex.protocolFollowed?' on':''}" id="tc-${prefix}-protocol"
+               onclick="toggleCheck('tc-${prefix}-protocol','${prefix}-protocol')">
+          <input type="checkbox" id="${prefix}-protocol" ${chkPro}> Protocol Followed
+        </label>
+        <label class="toggle-check${ex.medicationAdministered?' on':''}" id="tc-${prefix}-medication"
+               onclick="toggleCheck('tc-${prefix}-medication','${prefix}-medication');toggleMedName('${prefix}')">
+          <input type="checkbox" id="${prefix}-medication" ${chkMed}> Medication Administered
+        </label>
+      </div>
+      <div class="form-group" id="${prefix}-med-name-wrap" style="display:${onMed?'flex':'none'}">
+        <label for="${prefix}-med-name">Medication Name</label>
+        <input type="text" id="${prefix}-med-name" placeholder="e.g. Midazolam" value="${ex.medicationName||''}">
+      </div>
+      <div class="form-group full">
+        <label for="${prefix}-postictal">Post-ictal Notes</label>
+        <textarea id="${prefix}-postictal" rows="3"
+          placeholder="Describe the child's state after the seizure — confusion, fatigue, behaviours…">${ex.postIctalNotes||''}</textarea>
+      </div>
+    </div>`;
+}
+
 // ─── LOG INCIDENT ─────────────────────────────────────────────────────────────
 function renderLog(){
   const childOpts = CHILDREN.map(c=>`<option value="${c.id}">${c.name} — ${c.room}</option>`).join('')
@@ -605,49 +662,7 @@ function renderLog(){
     </div>
     <div class="form-section seizure-section" id="seizure-section" style="display:none">
       <h3>&#128148; Seizure Details</h3>
-      <div class="form-grid">
-        <div class="form-group">
-          <label for="sz-type">Seizure Type</label>
-          <select id="sz-type">
-            <option value="">— Select —</option>
-            ${CONFIG.seizure_types.map(t=>`<option>${t}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="sz-position">Position During Seizure</label>
-          <select id="sz-position">
-            <option value="">— Select —</option>
-            ${CONFIG.seizure_positions.map(p=>`<option>${p}</option>`).join('')}
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="sz-duration">Duration (seconds)</label>
-          <input type="number" id="sz-duration" min="1" max="600" placeholder="e.g. 90">
-        </div>
-        <div class="form-group">
-          <label for="sz-recovery">Recovery Time (minutes)</label>
-          <input type="number" id="sz-recovery" min="0" max="120" placeholder="e.g. 15">
-        </div>
-        <div class="form-group full" style="display:flex;gap:16px;flex-wrap:wrap">
-          <label class="toggle-check" id="tc-emergency" onclick="toggleCheck('tc-emergency','sz-emergency')">
-            <input type="checkbox" id="sz-emergency"> Emergency Services Called
-          </label>
-          <label class="toggle-check" id="tc-protocol" onclick="toggleCheck('tc-protocol','sz-protocol')">
-            <input type="checkbox" id="sz-protocol"> Protocol Followed
-          </label>
-          <label class="toggle-check" id="tc-medication" onclick="toggleCheck('tc-medication','sz-medication');toggleMedName()">
-            <input type="checkbox" id="sz-medication"> Medication Administered
-          </label>
-        </div>
-        <div class="form-group" id="sz-med-name-wrap" style="display:none">
-          <label for="sz-med-name">Medication Name</label>
-          <input type="text" id="sz-med-name" placeholder="e.g. Midazolam">
-        </div>
-        <div class="form-group full">
-          <label for="sz-postictal">Post-ictal Notes</label>
-          <textarea id="sz-postictal" rows="3" placeholder="Describe the child's state after the seizure — confusion, fatigue, behaviours…"></textarea>
-        </div>
-      </div>
+      ${renderSeizureFields('sz', null)}
     </div>
     <button class="btn-primary" onclick="saveIncident()">&#10003; Save Incident</button>
   </div>`;
@@ -680,9 +695,9 @@ function toggleCheck(labelId, inputId){
   if(!lbl||!inp) return;
   lbl.classList.toggle('on', inp.checked);
 }
-function toggleMedName(){
-  const checked=document.getElementById('sz-medication').checked;
-  const wrap=document.getElementById('sz-med-name-wrap');
+function toggleMedName(prefix){
+  const checked=document.getElementById(prefix+'-medication').checked;
+  const wrap=document.getElementById(prefix+'-med-name-wrap');
   if(wrap) wrap.style.display=checked?'flex':'none';
 }
 function autoFillRoom(){
@@ -732,7 +747,8 @@ async function saveIncident(){
       emergencyServicesCalled:document.getElementById('sz-emergency').checked,
       protocolFollowed:document.getElementById('sz-protocol').checked,
       medicationAdministered:document.getElementById('sz-medication').checked,
-      medicationName:document.getElementById('sz-medication').checked?(document.getElementById('sz-med-name').value.trim()||null):null,
+      medicationName:document.getElementById('sz-medication').checked
+        ?(document.getElementById('sz-med-name').value.trim()||null):null,
       postIctalNotes:document.getElementById('sz-postictal').value.trim()||null,
     };
   }
@@ -993,8 +1009,9 @@ function renderReports(){
     </div>
   </div>
 
-  <div style="margin:0 0 22px">
+  <div style="margin:0 0 22px;display:flex;gap:10px;flex-wrap:wrap">
     <button class="btn-outline" onclick="exportIncidentsCsv()">&#11015; Export All Incidents (CSV)</button>
+    <button class="btn-outline" onclick="exportSeizuresCsv()" style="border-color:var(--crisis);color:var(--crisis)">&#11015; Export Seizure Log (CSV)</button>
   </div>
 
   <div class="recent-reports">
@@ -1135,8 +1152,17 @@ async function exportIncidentsCsv(){
   try{
     const res=await fetch('/api/export/incidents.csv');
     const d=await res.json().catch(()=>({}));
-    if(!res.ok||!d.success){alert('Export eșuat: '+(d.error||('HTTP '+res.status)));return;}
-    showToast('Exportul CSV a fost salvat local în folderul Rapoarte_Salvate');
+    if(!res.ok||!d.success){alert('Export failed: '+(d.error||('HTTP '+res.status)));return;}
+    showToast('Incidents CSV saved to Reports folder');
+    loadRecentReports();
+  }catch(err){alert('Network error: '+err.message);}
+}
+async function exportSeizuresCsv(){
+  try{
+    const res=await fetch('/api/export/seizures.csv');
+    const d=await res.json().catch(()=>({}));
+    if(!res.ok||!d.success){alert('Export failed: '+(d.error||('HTTP '+res.status)));return;}
+    showToast('Seizure Log CSV saved to Reports folder');
     loadRecentReports();
   }catch(err){alert('Network error: '+err.message);}
 }
@@ -1413,8 +1439,9 @@ function showIncidentModal(id){
     ${i.seizureDetail.postIctalNotes?`<div class="modal-row"><div class="modal-lbl">Post-ictal Notes</div><div class="modal-val" style="line-height:1.6">${i.seizureDetail.postIctalNotes}</div></div>`:''}
     `:''}
     ${sessionsBanner?`<hr class="modal-divider">${sessionsBanner}`:''}
-    <div style="margin-top:18px;display:flex;gap:10px">
+    <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap">
       <button class="btn-outline" onclick="closeOverlay()">Close</button>
+      ${i.subtype==='Epileptic Seizure'?`<button class="btn-outline" style="border-color:var(--crisis);color:var(--crisis)" onclick="closeOverlay();openEditSeizureModal(${i.id})">${i.seizureDetail?'Edit':'Add'} Seizure Details</button>`:''}
       <button class="btn-accent" onclick="closeOverlay();showChildDetail(${i.childId})">View Child Profile</button>
     </div>
   </div>`;
@@ -1779,6 +1806,57 @@ async function completeSession(id){
     const i=THERAPY_SESSIONS.findIndex(x=>x.id===id);
     if(i>=0) THERAPY_SESSIONS[i]=saved;
     closeOverlay();showToast('Session completed');renderTherapyBody();
+  }catch(err){alert('Network error: '+err.message);}
+}
+
+function openEditSeizureModal(incidentId){
+  const i=INCIDENTS.find(x=>x.id===incidentId);
+  if(!i) return;
+  const c=child(i.childId);
+  const isEdit=!!i.seizureDetail;
+  const overlay=document.getElementById('overlay');
+  overlay.style.display='flex';overlay.className='overlay';
+  overlay.innerHTML=`<div class="modal" style="max-width:640px">
+    <div class="modal-hdr">
+      <div>
+        <div class="modal-title">${isEdit?'Edit':'Add'} Seizure Details</div>
+        <div style="font-size:13px;color:var(--gray-700);margin-top:2px">${c?c.name:'—'} &middot; ${fmtDate(i.date)} ${i.time}</div>
+      </div>
+      <button class="modal-close" onclick="closeOverlay()">&#10005;</button>
+    </div>
+    ${renderSeizureFields('esz', i.seizureDetail)}
+    <div style="margin-top:18px;display:flex;gap:10px">
+      <button class="btn-outline" onclick="closeOverlay();showIncidentModal(${incidentId})">Cancel</button>
+      <button class="btn-primary" style="width:auto;padding:10px 24px" onclick="saveEditedSeizure(${incidentId})">Save Changes</button>
+    </div>
+  </div>`;
+  overlay.onclick=function(e){if(e.target===overlay){closeOverlay();showIncidentModal(incidentId);}};
+}
+
+async function saveEditedSeizure(incidentId){
+  const p='esz';
+  const payload={
+    seizureType:document.getElementById(p+'-type').value||null,
+    durationSeconds:parseInt(document.getElementById(p+'-duration').value)||null,
+    recoveryTimeMinutes:parseInt(document.getElementById(p+'-recovery').value)||null,
+    positionDuring:document.getElementById(p+'-position').value||null,
+    emergencyServicesCalled:document.getElementById(p+'-emergency').checked,
+    protocolFollowed:document.getElementById(p+'-protocol').checked,
+    medicationAdministered:document.getElementById(p+'-medication').checked,
+    medicationName:document.getElementById(p+'-medication').checked
+      ?(document.getElementById(p+'-med-name').value.trim()||null):null,
+    postIctalNotes:document.getElementById(p+'-postictal').value.trim()||null,
+  };
+  try{
+    const res=await fetch(`/api/incidents/${incidentId}/seizure`,{method:'PUT',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(!res.ok){const e=await res.json().catch(()=>({}));alert(e.error||('HTTP '+res.status));return;}
+    const saved=await res.json();
+    const idx=INCIDENTS.findIndex(x=>x.id===incidentId);
+    if(idx>=0){INCIDENTS[idx].seizureDetail=saved;INCIDENTS[idx].subtype='Epileptic Seizure';}
+    closeOverlay();
+    showToast('Seizure details saved');
+    showIncidentModal(incidentId);
   }catch(err){alert('Network error: '+err.message);}
 }
 

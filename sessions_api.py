@@ -16,10 +16,56 @@ from datetime import datetime
 from flask import Blueprint, jsonify, request
 
 import config
-from models import db, Child, Staff, TherapyGoal, TherapySession
-from serializers import serialize_goal, serialize_therapy_session
+from models import db, Child, Staff, TherapyGoal, TherapySession, Incident, SeizureDetail
+from serializers import serialize_goal, serialize_therapy_session, serialize_seizure_detail
 
 sessions_bp = Blueprint("sessions", __name__, url_prefix="/api")
+
+
+# ─── Seizure Detail ──────────────────────────────────────────────────────────
+
+@sessions_bp.route("/incidents/<int:incident_id>/seizure", methods=["PUT"])
+def update_seizure_detail(incident_id):
+    incident = db.session.get(Incident, incident_id)
+    if incident is None:
+        return jsonify({"error": "Unknown incident"}), 404
+
+    data = request.get_json(silent=True) or {}
+
+    if "seizureType" in data and data["seizureType"] and \
+            data["seizureType"] not in config.SEIZURE_TYPES:
+        return jsonify({"error": "Invalid seizure type"}), 400
+    if "positionDuring" in data and data["positionDuring"] and \
+            data["positionDuring"] not in config.SEIZURE_POSITIONS:
+        return jsonify({"error": "Invalid position"}), 400
+
+    sd = incident.seizure_detail
+    if sd is None:
+        incident.subtype = "Epileptic Seizure"
+        sd = SeizureDetail(incident_id=incident_id)
+        db.session.add(sd)
+
+    field_map = [
+        ("seizureType",             "seizure_type"),
+        ("durationSeconds",         "duration_seconds"),
+        ("recoveryTimeMinutes",     "recovery_time_minutes"),
+        ("positionDuring",          "position_during"),
+        ("emergencyServicesCalled", "emergency_services_called"),
+        ("protocolFollowed",        "protocol_followed"),
+        ("medicationAdministered",  "medication_administered"),
+        ("medicationName",          "medication_name"),
+        ("postIctalNotes",          "post_ictal_notes"),
+    ]
+    for json_key, col in field_map:
+        if json_key in data:
+            value = data[json_key]
+            # Store empty strings as NULL — consistent with how other text fields behave
+            if value == "":
+                value = None
+            setattr(sd, col, value)
+
+    db.session.commit()
+    return jsonify(serialize_seizure_detail(sd))
 
 
 # ─── Goals ──────────────────────────────────────────────────────────────────

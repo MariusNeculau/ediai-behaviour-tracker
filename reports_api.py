@@ -15,7 +15,7 @@ from reports import (
     period_start, build_child_report, build_class_report, build_school_report,
     render_report_pdf,
 )
-from exports import incidents_to_csv
+from exports import incidents_to_csv, seizures_to_csv
 from report_storage import save_report, list_saved_reports, FOLDER_NAME
 
 reports_bp = Blueprint("reports", __name__, url_prefix="/api")
@@ -142,6 +142,24 @@ def school_report():
     filename = f"EDI_AI_Report_Whole_School_{period}_{stamp}.pdf"
     try:
         save_report(filename, pdf)
+    except OSError as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+    return jsonify({"success": True, "filename": filename, "folder": FOLDER_NAME})
+
+
+@reports_bp.route("/export/seizures.csv", methods=["GET"])
+def export_seizures_csv():
+    incidents = (
+        Incident.query
+        .filter_by(subtype="Epileptic Seizure")
+        .order_by(Incident.occurred_at.desc())
+        .all()
+    )
+    data = ("﻿" + seizures_to_csv(incidents)).encode("utf-8")
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"EDI_AI_SeizureLog_{stamp}.csv"
+    try:
+        save_report(filename, data)
     except OSError as e:
         return jsonify({"success": False, "error": str(e)}), 500
     return jsonify({"success": True, "filename": filename, "folder": FOLDER_NAME})
