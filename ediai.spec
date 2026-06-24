@@ -9,8 +9,8 @@ a = Analysis(
     binaries=rl_binaries,
     datas=[("templates", "templates")] + rl_datas,
     hiddenimports=[
-        "settings_api", "reports_api", "reports", "serializers",
-        "models", "config",
+        "settings_api", "sessions_api", "reports_api", "reports",
+        "serializers", "models", "config", "exports", "report_storage",
     ] + rl_hidden,
     hookspath=[],
     hooksconfig={},
