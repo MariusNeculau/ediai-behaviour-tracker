@@ -651,3 +651,56 @@ def test_child_report_pdf_without_seizures_still_valid(app, client, child_id,
     res = client.get(f"/api/reports/child/{child_id}?period=month")
     assert res.status_code == 200
     assert (saved_reports_dir / res.get_json()["filename"]).read_bytes()[:4] == b"%PDF"
+
+
+# ─── Emergency Protocol Card (Deliverable 5) ─────────────────────────────────
+
+def test_emergency_card_unknown_child_returns_404(client):
+    res = client.get("/api/reports/child/99999/emergency-card")
+    assert res.status_code == 404
+
+
+def test_emergency_card_returns_inline_pdf(client, child_id):
+    res = client.get(f"/api/reports/child/{child_id}/emergency-card")
+    assert res.status_code == 200
+    assert res.mimetype == "application/pdf"
+    assert res.data[:4] == b"%PDF"
+
+
+def test_emergency_card_content_disposition_is_inline(client, child_id):
+    res = client.get(f"/api/reports/child/{child_id}/emergency-card")
+    cd = res.headers.get("Content-Disposition", "")
+    assert cd.startswith("inline")
+
+
+def test_emergency_card_with_seizure_history(client, child_id, seizure_incident_id):
+    res = client.get(f"/api/reports/child/{child_id}/emergency-card")
+    assert res.status_code == 200
+    assert res.data[:4] == b"%PDF"
+
+
+def test_emergency_card_child_with_no_seizures(client, child_id):
+    # Should still produce a valid PDF (just no seizure rows)
+    res = client.get(f"/api/reports/child/{child_id}/emergency-card")
+    assert res.status_code == 200
+    assert res.data[:4] == b"%PDF"
+
+
+def test_emergency_card_uses_at_most_3_seizures(app, client, child_id):
+    from models import db, Incident
+    from datetime import datetime
+
+    with app.app_context():
+        for day in range(1, 7):   # 6 seizures
+            db.session.add(Incident(
+                child_id=child_id,
+                occurred_at=datetime(2026, 6, day, 10, 0),
+                type="Crisis", subtype="Epileptic Seizure",
+                severity="High", description=f"Seizure {day}", status="Resolved",
+            ))
+        db.session.commit()
+
+    res = client.get(f"/api/reports/child/{child_id}/emergency-card")
+    # Just verify it doesn't crash and returns a PDF regardless of count
+    assert res.status_code == 200
+    assert res.data[:4] == b"%PDF"

@@ -11,14 +11,40 @@ from flask import Blueprint, jsonify, request
 
 from models import db, Child, Incident, Room, SystemConfig, TherapyGoal
 from serializers import serialize_system_config
+from flask import Response
 from reports import (
     period_start, build_child_report, build_class_report, build_school_report,
-    render_report_pdf,
+    render_report_pdf, render_emergency_card_pdf,
 )
 from exports import incidents_to_csv, seizures_to_csv
 from report_storage import save_report, list_saved_reports, FOLDER_NAME
 
 reports_bp = Blueprint("reports", __name__, url_prefix="/api")
+
+
+@reports_bp.route("/reports/child/<int:child_id>/emergency-card", methods=["GET"])
+def child_emergency_card(child_id):
+    child = db.session.get(Child, child_id)
+    if child is None:
+        return jsonify({"error": "Unknown child"}), 404
+
+    seizure_incidents = (
+        Incident.query
+        .filter_by(child_id=child_id, subtype="Epileptic Seizure")
+        .order_by(Incident.occurred_at.desc())
+        .limit(3)
+        .all()
+    )
+    sc = serialize_system_config(SystemConfig.query.first())
+    pdf = render_emergency_card_pdf(
+        child, seizure_incidents, sc["name"], sc["roll_number"]
+    )
+    safe_name = re.sub(r"[^A-Za-z0-9]+", "_", child.name).strip("_") or "child"
+    return Response(
+        pdf,
+        mimetype="application/pdf",
+        headers={"Content-Disposition": f"inline; filename=EDI_AI_EmergencyCard_{safe_name}.pdf"},
+    )
 
 
 @reports_bp.route("/reports/saved", methods=["GET"])

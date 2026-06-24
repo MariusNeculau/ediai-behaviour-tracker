@@ -580,3 +580,204 @@ def render_report_pdf(report):
 
 # Back-compat: vechiul nume folosit inainte de generalizare.
 render_child_report_pdf = render_report_pdf
+
+
+_EMERGENCY_STEPS = [
+    "Stay calm — note the exact time the seizure starts.",
+    "Clear the area of hard or sharp objects. Do not restrain the child.",
+    "Cushion the head with something soft. Loosen any tight clothing.",
+    "Do not put anything in the child's mouth.",
+    "After convulsions stop, turn the child into the recovery position.",
+    (
+        "Call 999 if: seizure lasts more than 5 minutes · a second seizure "
+        "follows immediately · the child does not regain consciousness · "
+        "there is injury or breathing difficulty."
+    ),
+    "Document the seizure and notify parents / guardian.",
+]
+
+
+def render_emergency_card_pdf(child, seizure_incidents, school_name, school_roll):
+    """Compact single-page emergency protocol card per child."""
+    from collections import Counter as _Counter
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=A4,
+        leftMargin=14 * mm, rightMargin=14 * mm,
+        topMargin=12 * mm, bottomMargin=12 * mm,
+    )
+
+    styles = getSampleStyleSheet()
+    crisis   = colors.HexColor("#C62828")
+    crisis_lt= colors.HexColor("#FFEBEE")
+    blue_lt  = colors.HexColor("#E3F2FD")
+    grey_grid= colors.HexColor("#bdbdbd")
+    dark     = colors.HexColor("#212529")
+    white    = colors.white
+
+    h_card = ParagraphStyle("hc", parent=styles["Normal"], fontName="Helvetica-Bold",
+                            fontSize=15, textColor=white, alignment=1)
+    sub_card = ParagraphStyle("sc", parent=styles["Normal"], fontName="Helvetica",
+                              fontSize=9, textColor=colors.HexColor("#ffcdd2"), alignment=1)
+    h2 = ParagraphStyle("h2ec", parent=styles["Normal"], fontName="Helvetica-Bold",
+                        fontSize=10, textColor=crisis, spaceBefore=6, spaceAfter=3)
+    body = ParagraphStyle("bec", parent=styles["Normal"], fontName="Helvetica",
+                          fontSize=9, textColor=dark)
+    step = ParagraphStyle("step", parent=styles["Normal"], fontName="Helvetica",
+                          fontSize=9, textColor=dark, leftIndent=6)
+
+    story = []
+
+    # ── Header band ───────────────────────────────────────────────────────────
+    hdr_data = [[
+        Paragraph(f"⚠ SEIZURE EMERGENCY PROTOCOL", h_card),
+    ]]
+    hdr_sub = [[
+        Paragraph(f"{school_name}  ·  Roll: {school_roll}  ·  EDI AI Behaviour Tracker", sub_card),
+    ]]
+    hdr_tbl = Table(hdr_data, colWidths=[182 * mm])
+    hdr_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), crisis),
+        ("TOPPADDING", (0, 0), (-1, -1), 10),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    sub_tbl = Table(hdr_sub, colWidths=[182 * mm])
+    sub_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#B71C1C")),
+        ("TOPPADDING", (0, 0), (-1, -1), 3),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+    ]))
+    story.extend([hdr_tbl, sub_tbl, Spacer(1, 6)])
+
+    # ── Child details ─────────────────────────────────────────────────────────
+    story.append(Paragraph("CHILD DETAILS", h2))
+    det = [
+        ["Name", child.name, "Class", child.room.name if child.room else "—"],
+        ["Key Worker", child.key_worker.name if child.key_worker else "—",
+         "Age / Support", f"{child.age or '—'} / {child.support or '—'}"],
+    ]
+    det_tbl = Table(det, colWidths=[22 * mm, 70 * mm, 26 * mm, 64 * mm])
+    det_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), blue_lt),
+        ("BACKGROUND", (2, 0), (2, -1), blue_lt),
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
+        ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
+        ("FONTNAME", (3, 0), (3, -1), "Helvetica"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("INNERGRID", (0, 0), (-1, -1), 0.4, grey_grid),
+        ("BOX", (0, 0), (-1, -1), 1.0, colors.HexColor("#90CAF9")),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.extend([det_tbl, Spacer(1, 6)])
+
+    # ── Seizure history summary ───────────────────────────────────────────────
+    story.append(Paragraph("SEIZURE HISTORY SUMMARY", h2))
+    details = [i.seizure_detail for i in seizure_incidents if i.seizure_detail]
+    total = len(seizure_incidents)
+    durations = [d.duration_seconds for d in details if d.duration_seconds]
+    avg_dur = f"{round(sum(durations)/len(durations))}s" if durations else "—"
+    type_counts = _Counter(d.seizure_type for d in details if d.seizure_type)
+    mc_type = type_counts.most_common(1)[0][0] if type_counts else "—"
+    proto_rate = (
+        f"{round(sum(1 for d in details if d.protocol_followed)/len(details)*100)}%"
+        if details else "—"
+    )
+    last_date = (
+        seizure_incidents[0].occurred_at.strftime("%d %b %Y")
+        if seizure_incidents else "None on record"
+    )
+    sum_data = [
+        ["Total on record", str(total), "Most common type", mc_type],
+        ["Avg duration", avg_dur, "Protocol compliance", proto_rate],
+        ["Last seizure", last_date, "", ""],
+    ]
+    sum_tbl = Table(sum_data, colWidths=[34 * mm, 56 * mm, 38 * mm, 54 * mm])
+    sum_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), crisis_lt),
+        ("BACKGROUND", (2, 0), (2, -1), crisis_lt),
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTNAME", (2, 0), (2, -1), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("SPAN", (1, 2), (3, 2)),
+        ("INNERGRID", (0, 0), (-1, -1), 0.4, grey_grid),
+        ("BOX", (0, 0), (-1, -1), 1.0, colors.HexColor("#EF9A9A")),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.extend([sum_tbl, Spacer(1, 6)])
+
+    # ── Emergency protocol steps ──────────────────────────────────────────────
+    story.append(Paragraph("EMERGENCY PROTOCOL", h2))
+    steps_data = [[Paragraph(f"<b>{i+1}.</b>  {s}", step)] for i, s in enumerate(_EMERGENCY_STEPS)]
+    steps_tbl = Table(steps_data, colWidths=[182 * mm])
+    steps_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), crisis_lt),
+        ("BOX", (0, 0), (-1, -1), 1.0, colors.HexColor("#EF9A9A")),
+        ("LINEBELOW", (0, 0), (-1, -2), 0.3, grey_grid),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.extend([steps_tbl, Spacer(1, 6)])
+
+    # ── Last 3 seizures ───────────────────────────────────────────────────────
+    if seizure_incidents:
+        story.append(Paragraph("RECENT SEIZURES (last 3)", h2))
+        sz_hdr = [["Date & Time", "Type", "Duration", "Protocol", "Emergency"]]
+        sz_rows = []
+        for inc in seizure_incidents[:3]:
+            sd = inc.seizure_detail
+            sz_rows.append([
+                inc.occurred_at.strftime("%d %b %Y %H:%M"),
+                (sd.seizure_type or "—") if sd else "—",
+                (f"{sd.duration_seconds}s" if sd and sd.duration_seconds else "—"),
+                ("Yes" if (sd and sd.protocol_followed) else "No"),
+                ("Yes" if (sd and sd.emergency_services_called) else "No"),
+            ])
+        sz_tbl = Table(sz_hdr + sz_rows, colWidths=[38*mm, 34*mm, 24*mm, 30*mm, 30*mm])
+        sz_style = [
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#7a7a7a")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("ALIGN", (2, 0), (4, -1), "CENTER"),
+            ("INNERGRID", (0, 0), (-1, -1), 0.4, grey_grid),
+            ("BOX", (0, 0), (-1, -1), 1.0, colors.HexColor("#7a7a7a")),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ]
+        for r_idx, inc in enumerate(seizure_incidents[:3], start=1):
+            sd = inc.seizure_detail
+            if sd and sd.emergency_services_called:
+                sz_style.append(("TEXTCOLOR", (4, r_idx), (4, r_idx), crisis))
+                sz_style.append(("FONTNAME", (4, r_idx), (4, r_idx), "Helvetica-Bold"))
+            if sd and not sd.protocol_followed:
+                sz_style.append(("TEXTCOLOR", (3, r_idx), (3, r_idx), colors.HexColor("#E65100")))
+                sz_style.append(("FONTNAME", (3, r_idx), (3, r_idx), "Helvetica-Bold"))
+        sz_tbl.setStyle(TableStyle(sz_style))
+        story.append(sz_tbl)
+
+    story.append(Spacer(1, 8))
+    from datetime import date as _date
+    story.append(Paragraph(
+        f"Generated {_date.today().strftime('%d %b %Y')}  ·  "
+        f"EDI AI Behaviour Tracker  ·  CONFIDENTIAL",
+        ParagraphStyle("footer", parent=styles["Normal"], fontName="Helvetica",
+                       fontSize=8, textColor=colors.grey, alignment=1),
+    ))
+
+    doc.build(story)
+    return buf.getvalue()

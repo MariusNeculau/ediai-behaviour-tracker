@@ -869,6 +869,7 @@ function renderChildDetail(id){
     <div style="display:flex;align-items:center;gap:12px">
       <span class="${supCls(c.support)}" style="font-size:14px">${c.support} Support</span>
       <button class="btn-accent" onclick="showReportModal('${c.name}')">&#128196; Generate Report</button>
+      <button class="btn-outline" onclick="printEmergencyCard(${c.id})">&#128247; Emergency Card</button>
       <button class="btn-outline" style="border-color:var(--crisis);color:var(--crisis)" onclick="showTab('seizurelog',${c.id})">&#128148; Seizure Log</button>
     </div>
   </div>
@@ -1663,6 +1664,10 @@ function showIncidentModal(id){
     </div>
   </div>`;
   overlay.onclick=function(e){if(e.target===overlay) closeOverlay();};
+}
+
+function printEmergencyCard(childId){
+  window.open(`/api/reports/child/${childId}/emergency-card`, '_blank');
 }
 
 function showReportModal(name){
