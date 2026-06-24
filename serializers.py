@@ -69,6 +69,15 @@ def serialize_seizure_detail(sd):
     }
 
 
+_PROMPT_ORDER = {
+    "Independent": 1,
+    "Gestural": 2,
+    "Verbal": 3,
+    "Physical": 4,
+    "Full Physical": 5,
+}
+
+
 def serialize_goal(g):
     completed = [s for s in g.sessions if s.status == "Completed"]
     accuracies = [
@@ -77,6 +86,27 @@ def serialize_goal(g):
         if s.total_trials and s.correct_trials is not None
     ]
     avg_accuracy = round(sum(accuracies) / len(accuracies)) if accuracies else None
+
+    # Prompt level trend — needs chronological order
+    with_prompt = sorted(
+        [s for s in completed if s.prompt_level in _PROMPT_ORDER],
+        key=lambda s: (s.conducted_at or ""),
+    )
+    latest_prompt = with_prompt[-1].prompt_level if with_prompt else None
+
+    prompt_trend = None
+    if len(with_prompt) >= 2:
+        scores = [_PROMPT_ORDER[s.prompt_level] for s in with_prompt]
+        half = len(scores) // 2
+        avg_first = sum(scores[:half]) / half
+        avg_second = sum(scores[half:]) / (len(scores) - half)
+        diff = avg_second - avg_first
+        if diff < -0.5:
+            prompt_trend = "improving"    # moving toward Independent (lower score)
+        elif diff > 0.5:
+            prompt_trend = "declining"
+        else:
+            prompt_trend = "stable"
 
     return {
         "id": g.id,
@@ -92,6 +122,8 @@ def serialize_goal(g):
         "achievedAt": g.achieved_at.isoformat() if g.achieved_at else None,
         "completedSessions": len(completed),
         "avgAccuracy": avg_accuracy,
+        "latestPromptLevel": latest_prompt,
+        "promptTrend": prompt_trend,
     }
 
 

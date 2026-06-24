@@ -943,6 +943,7 @@ function renderTherapySummaryCard(data){
           <span style="font-size:13px">${desc}</span>
         </div>
         <div style="margin-top:4px;display:flex;align-items:center;gap:10px">${progress}${criteria}</div>
+        ${promptTrendHtml(g)}
       </div>
       <div>${goalStatusBadge(g.status)}</div>
     </div>`;
@@ -1688,6 +1689,21 @@ function showReportModal(name){
 }
 
 // ─── THERAPY SESSIONS ────────────────────────────────────────────────────────
+function promptTrendHtml(g){
+  if(!g.latestPromptLevel && !g.promptTrend) return '';
+  const trendIcon={'improving':'&#8593;','stable':'&#8594;','declining':'&#8595;'};
+  const trendColor={'improving':'#2E7D32','stable':'#E65100','declining':'var(--crisis)'};
+  const trendLabel={'improving':'Improving','stable':'Stable','declining':'Declining'};
+  const icon=g.promptTrend?trendIcon[g.promptTrend]:'';
+  const color=g.promptTrend?trendColor[g.promptTrend]:'var(--gray-500)';
+  const label=g.promptTrend?trendLabel[g.promptTrend]:'';
+  return `<div style="font-size:11px;margin-top:2px;display:flex;align-items:center;gap:4px">
+    <span style="color:var(--gray-500)">Latest:</span>
+    <span class="prompt-badge" style="font-size:10px;padding:1px 7px">${g.latestPromptLevel||'—'}</span>
+    ${g.promptTrend?`<span style="color:${color};font-weight:700">${icon} ${label}</span>`:''}
+  </div>`;
+}
+
 function goalStatusBadge(s){
   const m={Active:'badge-goal-active',Achieved:'badge-goal-achieved',Paused:'badge-goal-paused',Discontinued:'badge-goal-discontinued'};
   return `<span class="badge ${m[s]||'badge-support'}">${s}</span>`;
@@ -1728,7 +1744,7 @@ function renderGoalsTable(){
     const progressLine=g.completedSessions>0
       ?`<div style="font-size:11px;color:var(--gray-500);margin-top:3px">
           ${g.completedSessions} session${g.completedSessions!==1?'s':''}&nbsp;&middot;&nbsp;avg&nbsp;<strong style="color:var(--accent)">${g.avgAccuracy!=null?g.avgAccuracy+'%':'—'}</strong>
-        </div>`
+        </div>${promptTrendHtml(g)}`
       :'';
     return `<tr>
       <td><strong>${g.childName}</strong></td>
