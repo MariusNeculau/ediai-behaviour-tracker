@@ -14,10 +14,11 @@ Pasul de împachetare (.exe cu PyInstaller) urmează mai târziu în roadmap.
 """
 
 import os
+import random
 import sys
 import threading
 import webbrowser
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from flask import Flask, Response, jsonify, render_template, request
 
@@ -106,6 +107,8 @@ def create_app():
     with app.app_context():
         db.create_all()
         seed_lookups()
+        if config.DEMO_MODE and Incident.query.count() == 0:
+            _seed_demo_incidents()
 
     register_routes(app)
     from settings_api import settings_bp
@@ -115,6 +118,59 @@ def create_app():
     from sessions_api import sessions_bp
     app.register_blueprint(sessions_bp)
     return app
+
+
+_DEMO_DESCRIPTIONS = [
+    "Pupil became dysregulated during transition between activities.",
+    "Challenging behaviour observed during group work.",
+    "Physical outburst; de-escalation protocol followed.",
+    "Pupil left the classroom without permission.",
+    "Distress escalated following an unannounced schedule change.",
+    "Repetitive behaviour transitioned to self-injurious action.",
+    "Verbal aggression towards staff during morning routine.",
+    "Property interference — items knocked off desk deliberately.",
+    "Screaming episode triggered by sensory overload in the hallway.",
+    "Refusal to comply with structured activity; sat on floor.",
+]
+_DEMO_NOTES = [
+    "Returned to baseline within 15 minutes.",
+    "Parents notified. No further intervention needed.",
+    "Will review antecedents at next MDT meeting.",
+    "Sensory break offered; pupil responded positively.",
+    "",
+]
+
+
+def _seed_demo_incidents():
+    """Populate synthetic incidents once on first start in DEMO_MODE."""
+    children = Child.query.filter_by(active=True).all()
+    staff_list = Staff.query.filter_by(active=True).all()
+    all_interventions = Intervention.query.all()
+    if not children or not staff_list:
+        return
+    now = datetime.utcnow()
+    for _ in range(30):
+        child = random.choice(children)
+        s = random.choice(staff_list)
+        occurred = now - timedelta(days=random.randint(0, 60), hours=random.randint(0, 6))
+        incident = Incident(
+            child_id=child.id,
+            staff_id=s.id,
+            occurred_at=occurred,
+            type=random.choice(config.INCIDENT_TYPES[:-1]),
+            severity=random.choice(config.SEVERITY_LEVELS),
+            trigger=random.choice(config.TRIGGERS),
+            description=random.choice(_DEMO_DESCRIPTIONS),
+            duration=random.choice([5, 10, 15, 20, 30]),
+            outcome=random.choice(config.OUTCOMES),
+            status="Resolved",
+            notes=random.choice(_DEMO_NOTES),
+        )
+        incident.interventions = random.sample(
+            all_interventions, min(random.randint(1, 3), len(all_interventions))
+        )
+        db.session.add(incident)
+    db.session.commit()
 
 
 def seed_lookups():
