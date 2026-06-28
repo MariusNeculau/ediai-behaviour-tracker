@@ -19,7 +19,7 @@ import threading
 import webbrowser
 from datetime import date, datetime
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
 
 import config
 from models import db, Child, Staff, Room, Incident, Intervention, SystemConfig, SeizureDetail
@@ -87,6 +87,22 @@ def create_app():
 
     db.init_app(app)
 
+    @app.before_request
+    def _demo_auth_check():
+        if not config.DEMO_MODE:
+            return
+        if request.path == "/health":
+            return
+        auth = request.authorization
+        if auth and auth.username == os.environ.get("DEMO_USER", "demo") and \
+                   auth.password == os.environ.get("DEMO_PASS", "demo"):
+            return
+        return Response(
+            "Demo — username: demo / password: demo",
+            401,
+            {"WWW-Authenticate": 'Basic realm="EDI AI Demo"'},
+        )
+
     with app.app_context():
         db.create_all()
         seed_lookups()
@@ -146,6 +162,10 @@ def seed_lookups():
 
 def register_routes(app):
 
+    @app.route("/health")
+    def health():
+        return "ok"
+
     @app.route("/")
     def dashboard():
         # Frontend generic portat din legacy/index.html. Identitatea școlii și
@@ -162,6 +182,7 @@ def register_routes(app):
             incidents=[_serialize_incident(i) for i in Incident.query.all()],
             today=today.isoformat(),
             today_display=today.strftime("%a %d %B %Y"),
+            is_demo=config.DEMO_MODE,
         )
 
     @app.route("/api/config")

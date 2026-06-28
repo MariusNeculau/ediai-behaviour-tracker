@@ -173,15 +173,25 @@ def app_data_dir():
 
 INSTANCE_DIR = os.path.join(app_data_dir(), "instance")
 
-SQLALCHEMY_DATABASE_URI = "sqlite:///" + os.path.join(INSTANCE_DIR, "behaviour.db")
+_raw_db_url = os.environ.get("DATABASE_URL")
+if _raw_db_url:
+    # Render's free PostgreSQL uses the legacy 'postgres://' prefix;
+    # SQLAlchemy requires 'postgresql://'
+    if _raw_db_url.startswith("postgres://"):
+        _raw_db_url = _raw_db_url.replace("postgres://", "postgresql://", 1)
+    SQLALCHEMY_DATABASE_URI = _raw_db_url
+else:
+    SQLALCHEMY_DATABASE_URI = "sqlite:///" + os.path.join(INSTANCE_DIR, "behaviour.db")
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-# Schimbă în producție / la împachetarea .exe
 SECRET_KEY = os.environ.get("EDIAI_SECRET_KEY", "dev-change-me")
 
-# Dacă True, `app.py` populează baza de date goală cu un set demonstrativ
-# minim de elevi/incidente (NU datele reale din mockup) la prima rulare.
-SEED_DEMO_DATA = not getattr(sys, "frozen", False)   # blank slate în build-ul .exe
+# DEMO_MODE: set to "true" via env var when deployed as a public demo.
+# Enables HTTP Basic Auth (user: demo / pass: demo) and the DEMO banner.
+DEMO_MODE = os.environ.get("DEMO_MODE", "").lower() in ("1", "true", "yes")
+
+# Seed synthetic children/incidents on first run.  Always blank in the .exe.
+SEED_DEMO_DATA = not getattr(sys, "frozen", False) or DEMO_MODE
 
 # Elevi generici de demonstrație (NU nume reale). Folosiți doar dacă
 # SEED_DEMO_DATA este True. keyWorker referă un nume din STAFF.
